@@ -69,7 +69,7 @@ Sparse retrieval uses keyword overlap between a claim and evidence passages.
 
 ### Dense retrieval
 
-Dense retrieval uses a lightweight Sentence-Transformers model such as `all-MiniLM-L6-v2` to encode claims and evidence passages into semantic vectors. Dense retrieval is included in the full research environment through `requirements-full.txt`.
+Dense retrieval uses a lightweight Sentence-Transformers model such as `all-MiniLM-L6-v2` to encode claims and evidence passages into semantic vectors. The single `requirements.txt` file includes both the Streamlit app dependencies and the full research dependencies.
 
 ### Hybrid retrieval
 
@@ -131,16 +131,10 @@ macOS/Linux:
 source .venv/bin/activate
 ```
 
-Install core dependencies:
+Install the full project dependencies:
 
 ```bash
 pip install -r requirements.txt
-```
-
-Optional full environment for dense retrieval:
-
-```bash
-pip install -r requirements-full.txt
 ```
 
 ## Run the Streamlit app
@@ -158,7 +152,7 @@ streamlit run app/streamlit_app.py
 For Streamlit Community Cloud:
 
 ```text
-Branch: master
+Branch: main
 Main file path: streamlit_app.py
 ```
 
@@ -224,7 +218,6 @@ pytest
 claim-verification-ai/
 ├── README.md
 ├── requirements.txt
-├── requirements-full.txt
 ├── streamlit_app.py
 ├── app/
 │   └── streamlit_app.py
@@ -287,7 +280,7 @@ This is an output format example, not a reported experiment result.
 - Some claims are private, local, undocumented, ambiguous, disputed, or too recent.
 - DuckDuckGo/web retrieval can vary depending on network access and search availability.
 - Wikipedia and OpenAlex coverage is strong for many public topics but not universal.
-- The Streamlit app uses a transparent baseline evidence labeler rather than a large trained NLI model.
+- The Streamlit app uses source-grounded retrieval and transparent evidence labeling, while the full research pipeline includes dense retrieval and classifier training scripts.
 - The SciFact benchmark pipeline must be run separately to generate real experiment metrics.
 
 ## Future work

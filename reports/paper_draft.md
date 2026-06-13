@@ -170,4 +170,4 @@ The updated hosted app extends the original scientific claim verification projec
 
 This extension does not mean the system can verify all real-world facts. It works best for public, well-documented claims and is weaker for private, local, very recent, or disputed claims. The app therefore reports an evidence signal and shows source links rather than presenting the prediction as absolute truth.
 
-The live app uses TF-IDF, BM25, and hybrid keyword retrieval so it can run without a GPU. The full research repository still includes optional dense retrieval and SciFact experiment scripts for benchmark-style evaluation.
+The live app uses TF-IDF, BM25, and hybrid keyword retrieval so it can run without a GPU. The full research repository also includes dense retrieval and SciFact experiment scripts for benchmark-style evaluation.

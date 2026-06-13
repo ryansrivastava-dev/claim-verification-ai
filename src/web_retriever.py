@@ -7,7 +7,7 @@ and ranks the passages with TF-IDF, BM25, or a hybrid score.
 Sources included without API keys:
 - Wikipedia / MediaWiki API for broad public facts.
 - OpenAlex API for scholarly and scientific evidence.
-- DuckDuckGo Search, when the optional package is available, for broader web
+- DuckDuckGo Search for broader web
   search snippets and reachable pages.
 
 The system is evidence-grounded, not omniscient: if sources are unavailable or

@@ -74,19 +74,14 @@ def main(project_root: Path | None = None) -> None:
         use_openalex = st.checkbox("OpenAlex scholarly works", value=True)
 
         st.caption(
-            "Use at least one source. General web search requires the optional DuckDuckGo package in requirements.txt."
+            "Use at least one source. General web search uses DuckDuckGo Search from requirements.txt."
         )
 
-    examples = [
-        "The capital of France is Paris.",
-        "High blood pressure increases risk of stroke.",
-        "Antibiotics are used to treat bacterial infections.",
-        "The Eiffel Tower is located in Berlin.",
-        "NASA launched the James Webb Space Telescope in 2021.",
-    ]
-
-    selected_example = st.selectbox("Example claims", examples)
-    claim = st.text_area("Claim to verify", value=selected_example, height=110)
+    claim = st.text_area(
+        "Claim to verify",
+        placeholder="Enter a factual claim to verify against public evidence sources.",
+        height=110,
+    )
 
     if not any([use_web, use_wikipedia, use_openalex]):
         st.write("Select at least one evidence source in the sidebar.")
