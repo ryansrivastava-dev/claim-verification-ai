@@ -1,0 +1,4 @@
+-r requirements.txt
+sentence-transformers>=2.7
+torch>=2.0
+seaborn>=0.13
