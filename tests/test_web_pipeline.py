@@ -1,6 +1,6 @@
 from src.claim_type_classifier import detect_claim_type
 from src.evidence_extractor import split_into_passages
-from src.web_pipeline import run_web_fact_check
+from src.web_pipeline import predict_from_evidence, run_web_fact_check
 from src.web_retriever import normalize_scores
 
 
@@ -47,7 +47,7 @@ def test_web_pipeline_returns_required_fields_with_fake_retriever():
         "The capital of France is Paris.",
         retriever=FakeRetriever(),
     )
-    assert result["predicted_label"] in {"Likely Supported", "Possibly Refuted", "Not Enough Evidence"}
+    assert result["predicted_label"] in {"Likely Supported", "Likely Refuted", "Not Enough Evidence"}
     assert result["top_evidence"]
     assert result["top_evidence"][0]["url"] == "https://example.com/paris"
     assert "claim_profile" in result
@@ -57,3 +57,22 @@ def test_web_pipeline_returns_required_fields_with_fake_retriever():
 def test_normalize_scores_handles_constant_values():
     scores = normalize_scores([5.0, 5.0, 5.0])
     assert list(scores) == [0.0, 0.0, 0.0]
+
+
+def test_current_role_claim_does_not_treat_old_biography_as_current_support():
+    profile = detect_claim_type("Joe Biden is the current president")
+    evidence = [
+        {
+            "title": "Joe Biden",
+            "source": "Wikipedia",
+            "url": "https://en.wikipedia.org/wiki/Joe_Biden",
+            "text": "Joe Biden is an American politician who served as the 46th president of the United States from 2021 to 2025.",
+            "score": 0.80,
+            "relevance_score": 0.70,
+            "trust_score": 0.82,
+        }
+    ]
+    label, confidence, explanation = predict_from_evidence("Joe Biden is the current president", evidence, profile)
+    assert label == "Likely Refuted"
+    assert confidence > 0.5
+    assert "past" in explanation.lower() or "former" in explanation.lower()

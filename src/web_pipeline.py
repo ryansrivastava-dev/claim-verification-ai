@@ -11,10 +11,10 @@ import re
 from typing import Any
 
 try:
-    from claim_type_classifier import detect_claim_type
+    from claim_type_classifier import ClaimProfile, detect_claim_type
     from web_retriever import MultiSourceEvidenceRetriever
 except ImportError:  # pragma: no cover
-    from src.claim_type_classifier import detect_claim_type
+    from src.claim_type_classifier import ClaimProfile, detect_claim_type
     from src.web_retriever import MultiSourceEvidenceRetriever
 
 
@@ -35,17 +35,30 @@ _NEGATION_CUES = [
     "incorrect",
 ]
 
-_SUPPORT_CUES = [
-    "is",
-    "are",
-    "was",
-    "were",
-    "increases",
-    "decreases",
-    "causes",
-    "associated with",
-    "located in",
-    "capital of",
+_HISTORICAL_ROLE_CUES = [
+    "former",
+    "previous",
+    "served as",
+    "was the",
+    "was president",
+    "was ceo",
+    "from 19",
+    "from 20",
+    "until 20",
+    "46th president",
+    "45th president",
+]
+
+_CURRENT_EVIDENCE_CUES = [
+    "current",
+    "currently",
+    "incumbent",
+    "present",
+    "serves as",
+    "serving as",
+    "is the",
+    "official",
+    "administration",
 ]
 
 
@@ -54,8 +67,21 @@ def _contains_phrase(text: str, phrases: list[str]) -> bool:
     return any(phrase in lower for phrase in phrases)
 
 
+def _normalize_words(text: str) -> list[str]:
+    return re.findall(r"[a-zA-Z0-9]+", str(text).lower())
+
+
+def _contains_entity(text: str, entity: str) -> bool:
+    """Return True when all meaningful entity words appear in the text."""
+    text_lower = str(text).lower()
+    words = [word for word in _normalize_words(entity) if len(word) > 1]
+    if not words:
+        return False
+    return all(word in text_lower for word in words)
+
+
 def _claim_terms(claim: str) -> set[str]:
-    tokens = re.findall(r"[a-zA-Z0-9]+", claim.lower())
+    tokens = _normalize_words(claim)
     stopwords = {
         "the",
         "a",
@@ -79,6 +105,10 @@ def _claim_terms(claim: str) -> set[str]:
         "that",
         "this",
         "it",
+        "current",
+        "currently",
+        "today",
+        "now",
     }
     return {token for token in tokens if token not in stopwords and len(token) > 2}
 
@@ -92,12 +122,152 @@ def _coverage_ratio(claim: str, evidence_text: str) -> float:
     return covered / len(terms)
 
 
-def predict_from_evidence(claim: str, evidence: list[dict[str, Any]]) -> tuple[str, float, str]:
+def _build_retrieval_query(claim: str, profile: ClaimProfile) -> str:
+    """Rewrite freshness-sensitive claims so search targets current sources.
+
+    Without this, a query like 'Joe Biden is the current president' may retrieve
+    old biography pages about Joe Biden instead of current officeholder pages.
+    """
+    role_claim = profile.current_role_claim
+    if not role_claim:
+        if profile.needs_current_source:
+            return f"{claim} current latest official source"
+        return claim
+
+    scope_part = f" of {role_claim.scope}" if role_claim.scope else ""
+    return f"current {role_claim.role}{scope_part} official source"
+
+
+def _predict_current_role_claim(
+    claim: str,
+    evidence: list[dict[str, Any]],
+    profile: ClaimProfile,
+) -> tuple[str, float, str] | None:
+    """Handle claims where 'current' changes the truth value.
+
+    The main rule is conservative: a current-role claim cannot be supported by
+    an old biography match. It needs role-specific current evidence. If strong
+    current/official evidence points to a different roleholder, label it refuted.
+    """
+    role_claim = profile.current_role_claim
+    if role_claim is None:
+        return None
+
+    subject = role_claim.subject
+    role = role_claim.role
+    scope = role_claim.scope
+
+    if not evidence:
+        return (
+            "Not Enough Evidence",
+            0.50,
+            "No public evidence was retrieved for this current-role claim.",
+        )
+
+    support_hits: list[dict[str, Any]] = []
+    refute_hits: list[dict[str, Any]] = []
+    historical_hits: list[dict[str, Any]] = []
+
+    for item in evidence[:5]:
+        combined_text = " ".join(
+            [
+                str(item.get("title", "")),
+                str(item.get("source", "")),
+                str(item.get("url", "")),
+                str(item.get("text", "")),
+            ]
+        ).lower()
+        relevance = float(item.get("relevance_score", 0.0))
+        score = float(item.get("score", 0.0))
+        trust = float(item.get("trust_score", 0.0))
+
+        has_subject = _contains_entity(combined_text, subject)
+        has_role = role.lower() in combined_text
+        has_scope = not scope or _contains_entity(combined_text, scope)
+        has_current_cue = _contains_phrase(combined_text, _CURRENT_EVIDENCE_CUES)
+        has_historical_cue = _contains_phrase(combined_text, _HISTORICAL_ROLE_CUES)
+        strong_source = trust >= 0.80 or any(
+            domain in combined_text
+            for domain in [
+                "whitehouse.gov",
+                ".gov",
+                "official",
+                "apple.com/leadership",
+                "about.google",
+                "microsoft.com/en-us/leadership",
+            ]
+        )
+
+        if has_subject and has_role and has_scope and has_historical_cue and not has_current_cue:
+            historical_hits.append(item)
+            continue
+
+        if has_subject and has_role and has_scope and (has_current_cue or strong_source) and relevance >= 0.10:
+            support_hits.append(item)
+            continue
+
+        if (
+            has_role
+            and has_scope
+            and not has_subject
+            and strong_source
+            and (has_current_cue or score >= 0.45 or relevance >= 0.15)
+        ):
+            refute_hits.append(item)
+
+    if support_hits:
+        best = support_hits[0]
+        return (
+            "Likely Supported",
+            min(0.91, 0.62 + float(best.get("score", 0.0))),
+            "Current-role evidence from a strong source matches the claimed person or organization.",
+        )
+
+    if refute_hits:
+        best = refute_hits[0]
+        scope_text = f" for {scope}" if scope else ""
+        return (
+            "Likely Refuted",
+            min(0.90, 0.60 + float(best.get("score", 0.0))),
+            (
+                f"The claim says {subject} is the current {role}{scope_text}, but the strongest current/official "
+                "evidence points to the role without matching that claimed subject."
+            ),
+        )
+
+    if historical_hits:
+        best = historical_hits[0]
+        return (
+            "Likely Refuted",
+            min(0.86, 0.56 + float(best.get("score", 0.0))),
+            (
+                "The strongest matching evidence describes the claimed person in a past or former role, "
+                "which does not support a claim about who holds the role currently."
+            ),
+        )
+
+    return (
+        "Not Enough Evidence",
+        0.58,
+        "The retrieved sources did not provide strong current-role evidence, so the app will not treat old matches as support.",
+    )
+
+
+def predict_from_evidence(
+    claim: str,
+    evidence: list[dict[str, Any]],
+    profile: ClaimProfile | None = None,
+) -> tuple[str, float, str]:
     """Assign an evidence label from retrieved passages.
 
     This deliberately avoids claiming certainty. It produces labels based on
     source-backed relevance signals and simple contradiction cues.
     """
+    if profile and profile.current_role_claim:
+        current_result = _predict_current_role_claim(claim, evidence, profile)
+        if current_result is not None:
+            return current_result
+
     if not evidence:
         return "Not Enough Evidence", 0.50, "No public evidence passages were retrieved for the claim."
 
@@ -106,6 +276,22 @@ def predict_from_evidence(claim: str, evidence: list[dict[str, Any]]) -> tuple[s
     best_score = float(best.get("score", 0.0))
     relevance = float(best.get("relevance_score", 0.0))
     coverage = _coverage_ratio(claim, best_text)
+
+    if profile and profile.needs_current_source:
+        combined = " ".join(
+            [
+                str(best.get("title", "")),
+                str(best.get("source", "")),
+                str(best.get("url", "")),
+                best_text,
+            ]
+        ).lower()
+        if not _contains_phrase(combined, _CURRENT_EVIDENCE_CUES) and float(best.get("trust_score", 0.0)) < 0.85:
+            return (
+                "Not Enough Evidence",
+                0.56,
+                "This is time-sensitive, and the strongest source does not clearly provide current evidence.",
+            )
 
     if relevance < 0.08 or coverage < 0.30:
         return (
@@ -119,7 +305,7 @@ def predict_from_evidence(claim: str, evidence: list[dict[str, Any]]) -> tuple[s
 
     if claim_negative != evidence_negative and relevance >= 0.18 and coverage >= 0.45:
         return (
-            "Possibly Refuted",
+            "Likely Refuted",
             min(0.84, 0.54 + best_score),
             "The strongest evidence is relevant, but its wording appears to conflict with the claim.",
         )
@@ -155,27 +341,30 @@ def run_web_fact_check(
         raise ValueError("Claim cannot be empty.")
 
     profile = detect_claim_type(claim)
+    retrieval_query = _build_retrieval_query(claim, profile)
+
     retriever = retriever or MultiSourceEvidenceRetriever(
         use_web=use_web,
         use_wikipedia=use_wikipedia,
         use_openalex=use_openalex,
     )
     evidence = retriever.retrieve(
-        claim=claim,
+        claim=retrieval_query,
         method=method,
         top_k=top_k,
         alpha=alpha,
         max_pages=max_pages,
     )
-    label, confidence, explanation = predict_from_evidence(claim, evidence)
+    label, confidence, explanation = predict_from_evidence(claim, evidence, profile=profile)
 
-    if profile.needs_current_source and label != "Not Enough Evidence":
+    if profile.needs_current_source:
         explanation = (
-            f"{explanation} This claim appears time-sensitive, so the source dates should be checked."
+            f"{explanation} Freshness guardrail applied: old biography matches are not enough for time-sensitive claims."
         )
 
     return {
         "claim": claim,
+        "retrieval_query": retrieval_query,
         "predicted_label": label,
         "confidence": confidence,
         "explanation": explanation,
@@ -183,6 +372,15 @@ def run_web_fact_check(
             "category": profile.category,
             "needs_current_source": profile.needs_current_source,
             "reason": profile.reason,
+            "current_role_claim": (
+                None
+                if profile.current_role_claim is None
+                else {
+                    "subject": profile.current_role_claim.subject,
+                    "role": profile.current_role_claim.role,
+                    "scope": profile.current_role_claim.scope,
+                }
+            ),
         },
         "retrieval_method": method,
         "top_evidence": evidence,
