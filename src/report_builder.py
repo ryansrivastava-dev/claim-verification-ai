@@ -29,7 +29,7 @@ def build_markdown_report(result: dict[str, Any]) -> str:
         f"**Confidence signal:** {float(result.get('confidence', 0.0)):.2f}",
         f"**Claim type:** {_safe(profile.get('category', 'unknown'))}",
         f"**Evidence strength:** {_safe(synthesis.get('evidence_strength', 'unknown'))}",
-        f"**Freshness check:** {'Enabled' if profile.get('needs_current_source') else 'Not triggered'}",
+        f"**Current-source handling:** {'Applied' if profile.get('needs_current_source') else 'Not needed'}",
         "",
         "## Explanation",
         _safe(result.get("explanation", "")),

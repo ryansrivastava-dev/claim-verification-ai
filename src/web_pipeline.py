@@ -131,7 +131,7 @@ def _coverage_ratio(claim: str, evidence_text: str) -> float:
 
 
 def _build_retrieval_query(claim: str, profile: ClaimProfile) -> str:
-    """Rewrite freshness-sensitive claims so search targets current sources.
+    """Rewrite current-sensitive claims so search targets current sources.
 
     Without this, a query like 'Joe Biden is the current president' may retrieve
     old biography pages about Joe Biden instead of current officeholder pages.
@@ -413,7 +413,7 @@ def run_web_fact_check(
 
     if profile.needs_current_source:
         explanation = (
-            f"{explanation} Freshness guardrail applied: old biography matches are not enough for time-sensitive claims."
+            f"{explanation} Current-source handling applied: old biography matches are not enough for time-sensitive claims."
         )
 
     summarized_evidence = summarize_evidence_batch(claim, evidence, max_items=max(8, top_k))
@@ -441,7 +441,7 @@ def run_web_fact_check(
             label, confidence, explanation = predict_from_evidence(claim, evidence, profile=profile)
             if profile.needs_current_source:
                 explanation = (
-                    f"{explanation} Freshness guardrail applied: old biography matches are not enough for time-sensitive claims."
+                    f"{explanation} Current-source handling applied: old biography matches are not enough for time-sensitive claims."
                 )
             summarized_evidence = summarize_evidence_batch(claim, evidence, max_items=max(8, top_k))
             synthesis = synthesize_evidence(

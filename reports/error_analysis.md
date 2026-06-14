@@ -16,7 +16,7 @@ This file is for recording real errors after running the benchmark or manually t
 
 | Claim | True label | Predicted label | What went wrong | Fix or next step |
 |---|---|---|---|---|
-| Joe Biden is the current president | Refuted | Previously likely supported | Old biography evidence matched Biden + president but did not prove current office | Added freshness guardrail for time-sensitive claims |
+| Joe Biden is the current president | Refuted | Previously likely supported | Old biography evidence matched Biden + president but did not prove current office | Added current-context handling for time-sensitive claims |
 
 ## How to generate more examples
 

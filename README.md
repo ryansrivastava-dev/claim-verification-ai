@@ -24,7 +24,7 @@ Claim
 → Source credibility scoring
 → Evidence summarization
 → Evidence synthesis
-→ Freshness guardrail for current facts
+→ Current-context handling for time-sensitive claims
 → Evidence-backed verdict
 → Downloadable citation report
 ```
@@ -43,7 +43,7 @@ The goal is not to be a perfect truth engine. The goal is to make verification t
 - Sources receive credibility signals such as official, scholarly, reference, news, or general web.
 - Evidence passages are summarized using an extractive summarizer.
 - Evidence synthesis explains the overall finding.
-- A freshness guardrail prevents old biography pages from being treated as proof of current facts. The app now avoids mislabeling climate claims as geography/history just because they mention a location.
+- Current-context handling prevents old biography pages from being treated as proof of current facts. The app now avoids mislabeling climate claims as geography/history just because they mention a location.
 - App returns labels such as:
   - `Likely Supported`
   - `Likely Refuted`

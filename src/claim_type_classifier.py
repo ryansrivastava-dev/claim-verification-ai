@@ -1,4 +1,4 @@
-"""Lightweight claim type and freshness detection.
+"""Lightweight claim type and current-context detection.
 
 The classifier is intentionally transparent. It does not decide whether a claim
 is true. It only decides what kind of claim the system is handling so retrieval
@@ -344,7 +344,7 @@ def _detect_category(lower: str) -> str:
 
 
 def detect_claim_type(claim: str) -> ClaimProfile:
-    """Classify a claim into a broad category and flag freshness needs."""
+    """Classify a claim into a broad category and flag current-source needs."""
     claim_text = str(claim).strip()
     lower = claim_text.lower()
 

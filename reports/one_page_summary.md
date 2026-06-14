@@ -11,7 +11,7 @@ I built a modular AI fact-checking system that verifies claims using live public
 ## System workflow
 
 ```text
-Claim → Claim Type Detection → Query Planning → Live Evidence Retrieval → Source Ranking → Evidence Summarization → Evidence Synthesis → Freshness Guardrail → Verdict + Citations + Report
+Claim → Claim Type Detection → Query Planning → Live Evidence Retrieval → Source Ranking → Evidence Summarization → Evidence Synthesis → Current-Context Handling → Verdict + Citations + Report
 ```
 
 ## Methods
@@ -22,7 +22,7 @@ Claim → Claim Type Detection → Query Planning → Live Evidence Retrieval �
 - Source credibility scoring
 - Extractive evidence summarization
 - Evidence synthesis
-- Current-fact/freshness guardrail
+- Current-fact handling
 - Downloadable Markdown and PDF reports
 
 ## Evaluation
