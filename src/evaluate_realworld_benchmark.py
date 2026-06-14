@@ -1,6 +1,6 @@
 """Evaluate the live web-grounded pipeline on a labeled benchmark CSV.
 
-This script does not include fake metrics. It only writes results after running
+This script does not include unverified metrics. It only writes results after running
 claims through the actual pipeline.
 
 Input CSV requirements:
@@ -31,9 +31,11 @@ except ImportError:  # pragma: no cover
 LABEL_MAP = {
     "supported": "Supported",
     "likely supported": "Supported",
+    "supported by evidence": "Supported",
     "refuted": "Refuted",
     "likely refuted": "Refuted",
     "possibly refuted": "Refuted",
+    "contradicted by evidence": "Refuted",
     "not enough evidence": "Not Enough Evidence",
     "nei": "Not Enough Evidence",
     "conflicting evidence": "Conflicting Evidence",
@@ -123,19 +125,19 @@ def evaluate(input_path: Path, limit: int | None = None, output_dir: Path = Path
     metrics_path = output_dir / "benchmark_metrics.json"
     metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
 
-    leaderboard = pd.DataFrame(
+    evaluation_summary = pd.DataFrame(
         [
             {
                 "System": "Modular live evidence pipeline",
                 "Evidence source": "Web/Wikipedia/OpenAlex",
-                "Model": "Retrieval + evidence synthesis baseline",
+                "Model": "Retrieval + entailment + evidence synthesis",
                 "Accuracy": metrics["accuracy"],
                 "Macro F1": metrics["macro_f1"],
                 "Claims evaluated": metrics["num_claims"],
             }
         ]
     )
-    leaderboard.to_csv(output_dir / "evaluation_leaderboard.csv", index=False)
+    evaluation_summary.to_csv(output_dir / "evaluation_summary.csv", index=False)
 
     cm = confusion_matrix(y_true, y_pred, labels=labels)
     fig, ax = plt.subplots(figsize=(max(6, len(labels) * 1.4), max(5, len(labels) * 1.2)))

@@ -16,6 +16,7 @@ try:
     from evidence_synthesizer import synthesize_evidence
     from query_planner import plan_search_queries
     from report_builder import build_markdown_report
+    from entailment_checker import add_entailment_scores
     from web_retriever import MultiSourceEvidenceRetriever
 except ImportError:  # pragma: no cover
     from src.claim_type_classifier import ClaimProfile, detect_claim_type
@@ -23,6 +24,7 @@ except ImportError:  # pragma: no cover
     from src.evidence_synthesizer import synthesize_evidence
     from src.query_planner import plan_search_queries
     from src.report_builder import build_markdown_report
+    from src.entailment_checker import add_entailment_scores
     from src.web_retriever import MultiSourceEvidenceRetriever
 
 
@@ -226,8 +228,8 @@ def _predict_current_role_claim(
     if support_hits:
         best = support_hits[0]
         return (
-            "Likely Supported",
-            min(0.91, 0.62 + float(best.get("score", 0.0))),
+            "Supported by Evidence",
+            min(0.88, 0.62 + float(best.get("score", 0.0))),
             "Current-role evidence from a strong source matches the claimed person or organization.",
         )
 
@@ -235,8 +237,8 @@ def _predict_current_role_claim(
         best = refute_hits[0]
         scope_text = f" for {scope}" if scope else ""
         return (
-            "Likely Refuted",
-            min(0.90, 0.60 + float(best.get("score", 0.0))),
+            "Contradicted by Evidence",
+            min(0.88, 0.60 + float(best.get("score", 0.0))),
             (
                 f"The claim says {subject} is the current {role}{scope_text}, but the strongest current/official "
                 "evidence points to the role without matching that claimed subject."
@@ -246,8 +248,8 @@ def _predict_current_role_claim(
     if historical_hits:
         best = historical_hits[0]
         return (
-            "Likely Refuted",
-            min(0.86, 0.56 + float(best.get("score", 0.0))),
+            "Contradicted by Evidence",
+            min(0.84, 0.56 + float(best.get("score", 0.0))),
             (
                 "The strongest matching evidence describes the claimed person in a past or former role, "
                 "which does not support a claim about who holds the role currently."
@@ -308,27 +310,65 @@ def predict_from_evidence(
             "The retrieved sources do not cover enough of the claim to support a reliable label.",
         )
 
+    checked = [
+        item for item in evidence[:5]
+        if item.get("entailment_label") in {"entailment", "contradiction", "neutral"}
+    ]
+    support_hits = [
+        item for item in checked
+        if item.get("entailment_label") == "entailment"
+        and float(item.get("entailment_confidence", 0.0)) >= 0.55
+        and float(item.get("relevance_score", 0.0)) >= 0.08
+    ]
+    contradiction_hits = [
+        item for item in checked
+        if item.get("entailment_label") == "contradiction"
+        and float(item.get("entailment_confidence", 0.0)) >= 0.55
+        and float(item.get("relevance_score", 0.0)) >= 0.08
+    ]
+
+    if support_hits and contradiction_hits:
+        best_support = max(support_hits, key=lambda item: float(item.get("entailment_confidence", 0.0)))
+        best_contra = max(contradiction_hits, key=lambda item: float(item.get("entailment_confidence", 0.0)))
+        if abs(float(best_support.get("entailment_confidence", 0.0)) - float(best_contra.get("entailment_confidence", 0.0))) < 0.12:
+            return (
+                "Conflicting Evidence",
+                0.64,
+                "Retrieved sources include both supporting and contradicting evidence, so the app does not force a one-sided label.",
+            )
+
+    if contradiction_hits:
+        best_contra = max(contradiction_hits, key=lambda item: float(item.get("entailment_confidence", 0.0)))
+        nli_conf = float(best_contra.get("entailment_confidence", 0.0))
+        return (
+            "Contradicted by Evidence",
+            min(0.88, 0.52 + 0.32 * nli_conf + 0.08 * float(best_contra.get("trust_score", 0.0))),
+            "The strongest relevant evidence contradicts the claim rather than merely mentioning similar words.",
+        )
+
+    if support_hits:
+        best_support = max(support_hits, key=lambda item: float(item.get("entailment_confidence", 0.0)))
+        nli_conf = float(best_support.get("entailment_confidence", 0.0))
+        return (
+            "Supported by Evidence",
+            min(0.88, 0.52 + 0.30 * nli_conf + 0.08 * float(best_support.get("trust_score", 0.0))),
+            "The strongest relevant evidence directly supports the claim relationship, not just the same keywords.",
+        )
+
     claim_negative = _contains_phrase(claim, _NEGATION_CUES)
     evidence_negative = _contains_phrase(best_text, _NEGATION_CUES)
 
     if claim_negative != evidence_negative and relevance >= 0.18 and coverage >= 0.45:
         return (
-            "Likely Refuted",
-            min(0.84, 0.54 + best_score),
+            "Contradicted by Evidence",
+            min(0.78, 0.50 + 0.20 * best_score),
             "The strongest evidence is relevant, but its wording appears to conflict with the claim.",
-        )
-
-    if relevance >= 0.18 and coverage >= 0.45:
-        return (
-            "Likely Supported",
-            min(0.90, 0.58 + best_score),
-            "The strongest retrieved evidence closely matches the claim and does not show an obvious contradiction.",
         )
 
     return (
         "Not Enough Evidence",
-        min(0.72, 0.50 + best_score),
-        "Some related evidence was found, but the match is not strong enough for a confident label.",
+        min(0.70, 0.50 + 0.18 * best_score),
+        "Related evidence was found, but the entailment check did not confirm direct support for the exact claim.",
     )
 
 
@@ -408,6 +448,7 @@ def run_web_fact_check(
         alpha=alpha,
         max_pages=max_pages,
     )
+    evidence = add_entailment_scores(claim, evidence, max_items=min(5, top_k))
 
     label, confidence, explanation = predict_from_evidence(claim, evidence, profile=profile)
 
@@ -438,6 +479,7 @@ def run_web_fact_check(
         )
         if second_pass:
             evidence = _dedupe_evidence(evidence + second_pass)[:top_k]
+            evidence = add_entailment_scores(claim, evidence, max_items=min(5, top_k))
             label, confidence, explanation = predict_from_evidence(claim, evidence, profile=profile)
             if profile.needs_current_source:
                 explanation = (

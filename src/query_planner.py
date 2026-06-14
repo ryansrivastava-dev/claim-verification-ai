@@ -113,6 +113,7 @@ def plan_search_queries(claim: str, profile: ClaimProfile | None = None, max_que
         queries.extend(
             [
                 claim,
+                f"{claim} fact check",
                 f"{terms} scientific evidence study",
                 f"{terms} official scientific source",
                 f"{terms} NIH CDC WHO NOAA NASA",

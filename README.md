@@ -6,9 +6,9 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-research%20prototype-orange)
 
-A modular AI fact-checking system that verifies claims using live public evidence, source ranking, evidence summarization, evidence synthesis, time-sensitive claim handling, and transparent citation-backed reports.
+A modular AI fact-checking system that verifies claims using live public evidence, source ranking, claim-evidence entailment checking, evidence summarization, evidence synthesis, time-sensitive claim handling, and transparent citation-backed reports.
 
-The project began as **Hybrid Retrieval for Scientific Claim Verification** and expanded into a broader web-grounded verification system. It still includes the SciFact research pipeline, but the deployed Streamlit app checks public claims using live evidence retrieval instead of a toy demo corpus.
+The project began as **Hybrid Retrieval for Scientific Claim Verification** and expanded into a broader web-grounded verification system. It still includes the SciFact research pipeline, while the deployed Streamlit app checks public claims using live evidence retrieval and citation-backed reports.
 
 ---
 
@@ -24,6 +24,7 @@ Claim
 → Source credibility scoring
 → Evidence summarization
 → Evidence synthesis
+→ Claim-evidence entailment check
 → Current-context handling for time-sensitive claims
 → Evidence-backed verdict
 → Downloadable citation report
@@ -39,14 +40,16 @@ The goal is not to be a perfect truth engine. The goal is to make verification t
 - System detects the claim category, including climate/environment, health/medical, science/technology, politics/government, business/economics, sports, geography/place, history, entertainment/culture, education, and time-sensitive claims.
 - Query planner creates targeted search queries instead of only searching the raw claim.
 - Evidence is retrieved from public sources at runtime.
-- Sources are ranked with TF-IDF, BM25, or hybrid keyword retrieval.
+- Sources are ranked with TF-IDF, BM25, or hybrid keyword retrieval, then checked against the claim using an entailment layer.
 - Sources receive credibility signals such as official, scholarly, reference, news, or general web.
 - Evidence passages are summarized using an extractive summarizer.
 - Evidence synthesis explains the overall finding.
+- Claim-evidence entailment checking helps prevent related sources from being mistaken for direct support.
 - Current-context handling prevents old biography pages from being treated as proof of current facts. The app now avoids mislabeling climate claims as geography/history just because they mention a location.
 - App returns labels such as:
-  - `Likely Supported`
-  - `Likely Refuted`
+  - `Supported by Evidence`
+  - `Contradicted by Evidence`
+  - `Conflicting Evidence`
   - `Not Enough Evidence`
 - Users can download a Markdown or PDF fact-check report.
 - The technical details view is readable by default, with raw JSON hidden under an advanced expander.
@@ -140,7 +143,7 @@ Outputs:
 ```text
 reports/benchmark_predictions.csv
 reports/benchmark_metrics.json
-reports/evaluation_leaderboard.csv
+reports/evaluation_summary.csv
 reports/figures/confusion_matrix.png
 ```
 
@@ -281,9 +284,9 @@ claim-verification-ai/
 - Add optional local small-language-model reasoning for query planning and evidence synthesis.
 - Add stronger temporal filtering for current-event claims.
 - Add source date extraction and publication-date scoring.
-- Add a saved benchmark leaderboard after real experiments are run.
-- Add a short demo GIF to the README.
-- Improve contradiction detection beyond keyword cues.
+- Add a saved benchmark summary after real experiments are run.
+- Add a short short walkthrough GIF to the README.
+- Expand entailment and contradiction checking beyond keyword cues.
 
 ---
 

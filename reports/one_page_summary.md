@@ -11,7 +11,7 @@ I built a modular AI fact-checking system that verifies claims using live public
 ## System workflow
 
 ```text
-Claim → Claim Type Detection → Query Planning → Live Evidence Retrieval → Source Ranking → Evidence Summarization → Evidence Synthesis → Current-Context Handling → Verdict + Citations + Report
+Claim → Claim Type Detection → Query Planning → Live Evidence Retrieval → Source Ranking → Evidence Summarization → Evidence Entailment Check → Evidence Synthesis → Current-Context Handling → Verdict + Citations + Report
 ```
 
 ## Methods
@@ -21,6 +21,7 @@ Claim → Claim Type Detection → Query Planning → Live Evidence Retrieval �
 - Hybrid retrieval
 - Source credibility scoring
 - Extractive evidence summarization
+- Claim-evidence entailment checking
 - Evidence synthesis
 - Current-fact handling
 - Downloadable Markdown and PDF reports
@@ -45,7 +46,7 @@ The project includes scripts for real benchmark evaluation using labeled CSV fil
 
 - Evaluate on AVeriTeC, SciFact, FEVER, or LIAR
 - Add optional small-language-model reasoning
-- Improve contradiction detection
+- Expand entailment and contradiction checking
 - Add source-date extraction
-- Add a public benchmark leaderboard after running real experiments
-- Add a demo video or GIF
+- Add a public benchmark summary after running real experiments
+- Add a short walkthrough video or GIF

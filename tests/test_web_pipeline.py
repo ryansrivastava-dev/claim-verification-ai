@@ -47,7 +47,7 @@ def test_web_pipeline_returns_required_fields_with_fake_retriever():
         "The capital of France is Paris.",
         retriever=FakeRetriever(),
     )
-    assert result["predicted_label"] in {"Likely Supported", "Likely Refuted", "Not Enough Evidence"}
+    assert result["predicted_label"] in {"Supported by Evidence", "Contradicted by Evidence", "Conflicting Evidence", "Not Enough Evidence"}
     assert result["top_evidence"]
     assert result["top_evidence"][0]["url"] == "https://example.com/paris"
     assert "claim_profile" in result
@@ -73,7 +73,7 @@ def test_current_role_claim_does_not_treat_old_biography_as_current_support():
         }
     ]
     label, confidence, explanation = predict_from_evidence("Joe Biden is the current president", evidence, profile)
-    assert label == "Likely Refuted"
+    assert label == "Contradicted by Evidence"
     assert confidence > 0.5
     assert "past" in explanation.lower() or "former" in explanation.lower()
 
@@ -115,7 +115,7 @@ def test_report_builder_can_make_citation_list_and_pdf_bytes():
 
     result = {
         "claim": "The capital of France is Paris.",
-        "predicted_label": "Likely Supported",
+        "predicted_label": "Supported by Evidence",
         "confidence": 0.87,
         "explanation": "Evidence matches the claim.",
         "claim_profile": {"category": "general knowledge", "needs_current_source": False},
@@ -163,3 +163,34 @@ def test_claim_type_detects_present_tense_leadership_claim():
     assert profile.needs_current_source is True
     assert profile.current_role_claim is not None
     assert profile.current_role_claim.role == "ceo"
+
+
+def test_entailment_layer_does_not_support_related_but_non_entailing_evidence():
+    from src.entailment_checker import check_entailment
+
+    result = check_entailment(
+        "Mars is blue",
+        "Mars has blue sunsets in some photographs, but the passage does not state that Mars itself is blue.",
+        prefer_model=False,
+    )
+    assert result.label in {"neutral", "contradiction"}
+
+
+def test_mars_blue_not_supported_by_related_evidence_only():
+    profile = detect_claim_type("Mars is blue")
+    evidence = [
+        {
+            "title": "Mars sky and color images",
+            "source": "TestSource",
+            "url": "https://example.com/mars",
+            "text": "Mars has blue sunsets in some photographs, and NASA images sometimes use blue tones for scientific visualization.",
+            "score": 0.82,
+            "relevance_score": 0.70,
+            "trust_score": 0.80,
+            "entailment_label": "neutral",
+            "entailment_confidence": 0.76,
+        }
+    ]
+    label, confidence, explanation = predict_from_evidence("Mars is blue", evidence, profile)
+    assert label == "Not Enough Evidence"
+    assert "direct support" in explanation.lower() or "entailment" in explanation.lower()

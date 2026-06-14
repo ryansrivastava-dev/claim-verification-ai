@@ -24,11 +24,13 @@ This project focuses on evidence-grounded AI. Instead of only predicting a label
 
 **Hybrid retrieval** combines sparse and dense signals. The goal is to keep the precision and interpretability of keyword matching while adding semantic matching for claims that use different wording than the evidence.
 
-**Claim verification** combines retrieval and classification. The pipeline in this project is:
+**Claim verification** combines retrieval and classification. The original scientific pipeline is:
 
 ```text
 Claim → Evidence Retrieval → Claim/Evidence Classification → Prediction + Evidence
 ```
+
+The live web-grounded app adds a conservative entailment step after retrieval. This step checks whether a retrieved passage directly supports, contradicts, or is neutral toward the exact claim. This helps reduce false positives where a source mentions the same entities but does not actually prove the relationship stated in the claim.
 
 ## 4. Dataset
 
@@ -174,8 +176,8 @@ The live app uses TF-IDF, BM25, and hybrid keyword retrieval so it can run witho
 
 ## Addendum: Modular Web-Grounded Fact Verification Upgrade
 
-The deployed version of the project extends the original scientific claim verification pipeline into a broader web-grounded fact verification prototype. The app now follows a modular workflow: claim type detection, query planning, live evidence retrieval, source ranking, evidence summarization, evidence synthesis, current-context handling for time-sensitive claims, final evidence labeling, and report generation.
+The deployed version of the project extends the original scientific claim verification pipeline into a broader web-grounded fact verification prototype. The app now follows a modular workflow: claim type detection, query planning, live evidence retrieval, source ranking, evidence summarization, claim-evidence entailment checking, evidence synthesis, current-context handling for time-sensitive claims, final evidence labeling, and report generation.
 
-This upgrade improves explainability because users can inspect the search plan, retrieved sources, source-quality signals, evidence summaries, synthesis, and citations. The system also includes a benchmark evaluation script that can compute accuracy, macro F1, per-class metrics, and confusion matrices from a labeled CSV. These results are intentionally not filled in until the evaluation is actually run.
+This upgrade improves explainability because users can inspect the search plan, retrieved sources, source-quality signals, evidence summaries, synthesis, and citations. The system also includes an entailment layer to reduce false positives caused by related-but-not-supporting evidence, plus a benchmark evaluation script that can compute accuracy, macro F1, per-class metrics, and confusion matrices from a labeled CSV. These results are intentionally not filled in until the evaluation is actually run.
 
 The system remains a research prototype. It does not guarantee truth, and it can fail when public evidence is incomplete, outdated, misleading, or ambiguous. Its purpose is to support human evidence review by making retrieval and reasoning steps visible.

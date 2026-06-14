@@ -22,7 +22,7 @@ The script saves:
 
 - `reports/benchmark_predictions.csv`
 - `reports/benchmark_metrics.json`
-- `reports/evaluation_leaderboard.csv`
+- `reports/evaluation_summary.csv`
 - `reports/figures/confusion_matrix.png`
 
 ## Metrics reported
