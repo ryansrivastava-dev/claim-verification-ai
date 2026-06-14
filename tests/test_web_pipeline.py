@@ -194,3 +194,91 @@ def test_mars_blue_not_supported_by_related_evidence_only():
     label, confidence, explanation = predict_from_evidence("Mars is blue", evidence, profile)
     assert label == "Not Enough Evidence"
     assert "direct support" in explanation.lower() or "entailment" in explanation.lower()
+
+
+def test_entailment_fallback_refutes_clear_descriptor_conflict():
+    from src.entailment_checker import check_entailment
+
+    result = check_entailment(
+        "Mars is blue",
+        "Mars is often called the Red Planet because iron oxide gives its surface a reddish color.",
+        prefer_model=False,
+    )
+    assert result.label == "contradiction"
+    assert result.confidence >= 0.70
+
+
+def test_mars_blue_refuted_when_canonical_evidence_says_red_planet():
+    profile = detect_claim_type("Mars is blue")
+    evidence = [
+        {
+            "title": "Mars",
+            "source": "Wikipedia",
+            "url": "https://en.wikipedia.org/wiki/Mars",
+            "text": "Mars is often called the Red Planet because iron oxide gives its surface a reddish color.",
+            "score": 0.86,
+            "relevance_score": 0.65,
+            "trust_score": 0.82,
+            "entailment_label": "contradiction",
+            "entailment_confidence": 0.72,
+        }
+    ]
+    label, confidence, explanation = predict_from_evidence("Mars is blue", evidence, profile)
+    assert label == "Contradicted by Evidence"
+    assert confidence > 0.70
+    assert "contradict" in explanation.lower()
+
+
+def test_search_plan_adds_entity_focused_queries_for_simple_attribute_claim():
+    from src.query_planner import plan_search_queries
+
+    plan = plan_search_queries("Mars is blue", max_queries=6)
+    joined = " | ".join(plan.generated_queries).lower()
+    assert "mars facts" in joined or "what is mars known as" in joined
+    assert any("entity-focused" in note.lower() for note in plan.strategy_notes)
+
+
+class FakeMarsReretriever:
+    def __init__(self):
+        self.calls = []
+
+    def retrieve(self, claim, method="Hybrid", top_k=5, alpha=0.5, max_pages=6):
+        self.calls.append(claim)
+        if len(self.calls) == 1:
+            return [
+                {
+                    "passage_id": "mars_blue_context",
+                    "doc_id": "fake_mars",
+                    "title": "Mars sky images",
+                    "source": "TestSource",
+                    "url": "https://example.com/mars-blue-sunsets",
+                    "text": "Mars has blue sunsets in some photographs, and scientific images sometimes use blue tones.",
+                    "score": 0.82,
+                    "relevance_score": 0.70,
+                    "tfidf_score": 0.70,
+                    "bm25_score": 0.80,
+                    "trust_score": 0.65,
+                }
+            ]
+        return [
+            {
+                "passage_id": "mars_red_planet",
+                "doc_id": "fake_mars_red",
+                "title": "Mars",
+                "source": "Wikipedia",
+                "url": "https://en.wikipedia.org/wiki/Mars",
+                "text": "Mars is often called the Red Planet because iron oxide gives its surface a reddish color.",
+                "score": 0.86,
+                "relevance_score": 0.65,
+                "tfidf_score": 0.72,
+                "bm25_score": 0.78,
+                "trust_score": 0.82,
+            }
+        ]
+
+
+def test_pipeline_reretrieves_and_refutes_mars_blue_with_canonical_evidence():
+    retriever = FakeMarsReretriever()
+    result = run_web_fact_check("Mars is blue", retriever=retriever)
+    assert len(retriever.calls) >= 2
+    assert result["predicted_label"] == "Contradicted by Evidence"

@@ -176,7 +176,7 @@ The live app uses TF-IDF, BM25, and hybrid keyword retrieval so it can run witho
 
 ## Addendum: Modular Web-Grounded Fact Verification Upgrade
 
-The deployed version of the project extends the original scientific claim verification pipeline into a broader web-grounded fact verification prototype. The app now follows a modular workflow: claim type detection, query planning, live evidence retrieval, source ranking, evidence summarization, claim-evidence entailment checking, evidence synthesis, current-context handling for time-sensitive claims, final evidence labeling, and report generation.
+The deployed version of the project extends the original scientific claim verification pipeline into a broader web-grounded fact verification prototype. The app now follows a modular workflow: claim type detection, query planning, live evidence retrieval, source ranking, evidence summarization, claim-evidence entailment checking, counter-evidence retrieval for weak matches, evidence synthesis, current-context handling for time-sensitive claims, final evidence labeling, and report generation.
 
 This upgrade improves explainability because users can inspect the search plan, retrieved sources, source-quality signals, evidence summaries, synthesis, and citations. The system also includes an entailment layer to reduce false positives caused by related-but-not-supporting evidence, plus a benchmark evaluation script that can compute accuracy, macro F1, per-class metrics, and confusion matrices from a labeled CSV. These results are intentionally not filled in until the evaluation is actually run.
 

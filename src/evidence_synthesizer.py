@@ -11,6 +11,11 @@ import re
 from dataclasses import dataclass, asdict
 from typing import Any
 
+try:
+    from entailment_checker import extract_simple_relation
+except ImportError:  # pragma: no cover
+    from src.entailment_checker import extract_simple_relation
+
 
 @dataclass(frozen=True)
 class EvidenceSynthesis:
@@ -87,8 +92,12 @@ def synthesize_evidence(
     rereview_query = None
     if needs_more:
         terms = " ".join(_important_terms(claim))
+        relation = extract_simple_relation(claim)
         if profile is not None and getattr(profile, "needs_current_source", False):
             rereview_query = f"{terms} current official source"
+        elif relation is not None:
+            subject, predicate = relation
+            rereview_query = f"{subject} facts known as {predicate} reliable source"
         else:
             rereview_query = f"{terms} reliable source evidence"
 

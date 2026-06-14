@@ -22,6 +22,7 @@ Claim → Claim Type Detection → Query Planning → Live Evidence Retrieval �
 - Source credibility scoring
 - Extractive evidence summarization
 - Claim-evidence entailment checking
+- Counter-evidence retrieval for simple fact claims
 - Evidence synthesis
 - Current-fact handling
 - Downloadable Markdown and PDF reports

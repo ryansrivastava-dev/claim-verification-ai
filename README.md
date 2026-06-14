@@ -20,6 +20,7 @@ Most simple fact-checking apps do one search and return a label. This project us
 Claim
 → Claim type detection
 → Query planning
+→ Counter-evidence query planning for simple fact claims
 → Live public evidence retrieval
 → Source credibility scoring
 → Evidence summarization
@@ -38,13 +39,13 @@ The goal is not to be a perfect truth engine. The goal is to make verification t
 
 - User enters any public factual claim.
 - System detects the claim category, including climate/environment, health/medical, science/technology, politics/government, business/economics, sports, geography/place, history, entertainment/culture, education, and time-sensitive claims.
-- Query planner creates targeted search queries instead of only searching the raw claim.
+- Query planner creates targeted search queries instead of only searching the raw claim, including entity-focused follow-up queries for simple subject-predicate claims.
 - Evidence is retrieved from public sources at runtime.
 - Sources are ranked with TF-IDF, BM25, or hybrid keyword retrieval, then checked against the claim using an entailment layer.
 - Sources receive credibility signals such as official, scholarly, reference, news, or general web.
 - Evidence passages are summarized using an extractive summarizer.
 - Evidence synthesis explains the overall finding.
-- Claim-evidence entailment checking helps prevent related sources from being mistaken for direct support.
+- Claim-evidence entailment checking helps prevent related sources from being mistaken for direct support, and flags clear contradictions when evidence establishes the opposite relationship.
 - Current-context handling prevents old biography pages from being treated as proof of current facts. The app now avoids mislabeling climate claims as geography/history just because they mention a location.
 - App returns labels such as:
   - `Supported by Evidence`
@@ -286,7 +287,7 @@ claim-verification-ai/
 - Add source date extraction and publication-date scoring.
 - Add a saved benchmark summary after real experiments are run.
 - Add a short short walkthrough GIF to the README.
-- Expand entailment and contradiction checking beyond keyword cues.
+- Benchmark the entailment and contradiction layer against labeled claim-evidence pairs.
 
 ---
 

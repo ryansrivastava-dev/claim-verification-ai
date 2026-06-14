@@ -8,7 +8,10 @@ passage supports, contradicts, or is neutral toward the claim.
 The implementation uses an optional lightweight NLI cross-encoder when it can be
 loaded. If the model is unavailable, the deterministic fallback stays
 conservative: it only supports a claim when the passage directly expresses the
-same relationship, and otherwise returns neutral instead of overclaiming.
+same relationship. The fallback also includes a small generic contradiction
+check for mutually exclusive descriptors, so obvious evidence like "Mars is
+called the Red Planet" can refute "Mars is blue" without turning the app into
+a brittle keyword matcher.
 """
 
 from __future__ import annotations
@@ -23,6 +26,24 @@ from typing import Any
 
 NLI_MODEL_NAME = os.getenv("NLI_MODEL_NAME", "cross-encoder/nli-MiniLM2-L6-H768")
 NLI_DISABLED = os.getenv("DISABLE_NLI_MODEL", "0").lower() in {"1", "true", "yes"}
+
+# Fallback-only semantic contrast groups. These are not the main reasoning system;
+# the NLI model is preferred when available. The groups provide a transparent
+# safety net for common mutually exclusive descriptors when the deployed app
+# cannot load the NLI model. This is intentionally broader than a one-off list
+# for any single example.
+_MUTUALLY_EXCLUSIVE_DESCRIPTOR_GROUPS: list[set[str]] = [
+    {"red", "reddish", "blue", "green", "yellow", "orange", "white", "black", "brown", "gray", "grey", "purple", "pink"},
+    {"hot", "warm", "cold", "cool", "freezing"},
+    {"increase", "increases", "increased", "rise", "rises", "rising", "decrease", "decreases", "decreased", "fall", "falls", "falling"},
+    {"legal", "illegal", "lawful", "unlawful"},
+    {"true", "false", "correct", "incorrect"},
+]
+
+_ENTITY_DESCRIPTOR_PATTERNS = [
+    r"{subject}.{{0,180}}(?:called|known as|referred to as|nicknamed)\s+(?:the\s+)?(?P<descriptor>[a-z][a-z\- ]{{1,60}})",
+    r"{subject}.{{0,180}}(?:is|are|was|were|appears|appear|looks|look)\s+(?:mostly\s+|often\s+|commonly\s+|generally\s+|a\s+|an\s+|the\s+)?(?P<descriptor>[a-z][a-z\- ]{{1,60}})",
+]
 
 
 @dataclass(frozen=True)
@@ -102,6 +123,83 @@ def _simple_relation(claim: str) -> tuple[str, str] | None:
     return None
 
 
+
+def extract_simple_relation(claim: str) -> tuple[str, str] | None:
+    """Public wrapper used by query planning and tests."""
+    return _simple_relation(claim)
+
+
+def _normalize_descriptor_terms(text: str) -> set[str]:
+    """Normalize a short descriptor phrase into comparable terms."""
+    return {
+        token
+        for token in re.findall(r"[a-z]+", str(text).lower())
+        if token not in {"the", "a", "an", "of", "to", "in", "on", "at", "and", "or", "planet", "body", "object"}
+        and len(token) > 1
+    }
+
+
+def _find_contrast_group(term: str) -> set[str] | None:
+    for group in _MUTUALLY_EXCLUSIVE_DESCRIPTOR_GROUPS:
+        if term in group:
+            return group
+    return None
+
+
+def _extract_evidence_descriptors(subject_terms: list[str], evidence_lower: str) -> list[str]:
+    """Extract descriptors explicitly attached to the claim subject in evidence."""
+    if not subject_terms:
+        return []
+    subject_pattern = r"\b" + r"\W+".join(map(re.escape, subject_terms)) + r"\b"
+    descriptors: list[str] = []
+    for pattern_template in _ENTITY_DESCRIPTOR_PATTERNS:
+        pattern = pattern_template.format(subject=subject_pattern)
+        for match in re.finditer(pattern, evidence_lower, flags=re.DOTALL):
+            descriptor = re.sub(r"\s+", " ", match.group("descriptor")).strip(" .,:;!?\"'")
+            if descriptor and descriptor not in descriptors:
+                descriptors.append(descriptor)
+    return descriptors
+
+
+def _fallback_descriptor_contradiction(subject: str, predicate: str, evidence_lower: str) -> EntailmentResult | None:
+    """Detect clear descriptor conflicts for simple subject-predicate claims.
+
+    Example: claim "Mars is blue" vs evidence "Mars is called the Red Planet".
+    This is a fallback guardrail, not the primary verifier.
+    """
+    subject_terms = _important_terms(subject)
+    predicate_terms = _normalize_descriptor_terms(predicate)
+    if not subject_terms or not predicate_terms:
+        return None
+
+    evidence_descriptors = _extract_evidence_descriptors(subject_terms, evidence_lower)
+    if not evidence_descriptors:
+        return None
+
+    evidence_terms = set()
+    for descriptor in evidence_descriptors:
+        evidence_terms.update(_normalize_descriptor_terms(descriptor))
+
+    for predicate_term in predicate_terms:
+        group = _find_contrast_group(predicate_term)
+        if not group:
+            continue
+        conflicting_terms = (group - {predicate_term}) & evidence_terms
+        if conflicting_terms:
+            conflict = sorted(conflicting_terms)[0]
+            return EntailmentResult(
+                "contradiction",
+                0.72,
+                (
+                    "The evidence explicitly attaches a mutually exclusive descriptor "
+                    f"('{conflict}') to the claim subject instead of the claimed descriptor "
+                    f"('{predicate_term}')."
+                ),
+                "nli-fallback-structured-contradiction",
+            )
+    return None
+
+
 def _has_negation(text: str) -> bool:
     return bool(
         re.search(
@@ -152,13 +250,23 @@ def _fallback_entailment(claim: str, evidence: str) -> EntailmentResult:
             if subject_present and predicate_present:
                 subject_pattern = r"\b" + r"\W+".join(map(re.escape, subject_terms)) + r"\b"
                 predicate_pattern = r"\b" + r"\W+".join(map(re.escape, predicate_terms)) + r"\b"
-                if re.search(subject_pattern + r".{0,120}" + predicate_pattern, evidence_lower, re.DOTALL):
-                    return EntailmentResult(
-                        "entailment",
-                        0.68,
-                        "The evidence directly links the claim subject and predicate.",
-                        "conservative-fallback",
-                    )
+                relation_window_pattern = (
+                    subject_pattern
+                    + r".{0,120}\b(?:is|are|was|were|appears|appear|looks|look|called|known as|referred to as)\b(?P<window>.{0,160})"
+                )
+                for relation_match in re.finditer(relation_window_pattern, evidence_lower, flags=re.DOTALL):
+                    window = relation_match.group("window")
+                    if all(term in window for term in predicate_terms):
+                        return EntailmentResult(
+                            "entailment",
+                            0.68,
+                            "The evidence directly states the same subject-predicate relationship as the claim.",
+                            "conservative-fallback",
+                        )
+        descriptor_contradiction = _fallback_descriptor_contradiction(subject, predicate, evidence_lower)
+        if descriptor_contradiction is not None:
+            return descriptor_contradiction
+
         return EntailmentResult(
             "neutral",
             0.62,

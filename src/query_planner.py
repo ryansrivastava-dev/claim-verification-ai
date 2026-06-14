@@ -14,8 +14,10 @@ from typing import Any
 
 try:
     from claim_type_classifier import ClaimProfile, detect_claim_type
+    from entailment_checker import extract_simple_relation
 except ImportError:  # pragma: no cover
     from src.claim_type_classifier import ClaimProfile, detect_claim_type
+    from src.entailment_checker import extract_simple_relation
 
 
 @dataclass(frozen=True)
@@ -74,6 +76,38 @@ def _dedupe_queries(queries: list[str], max_queries: int) -> list[str]:
     return clean
 
 
+
+def _relation_queries(claim: str) -> list[str]:
+    """Generate extra queries for simple subject-predicate claims.
+
+    This improves cases where the raw claim retrieves related but incomplete
+    evidence. For example, "Mars is blue" should also search for canonical Mars
+    facts, not only pages that happen to mention blue sunsets.
+    """
+    relation = extract_simple_relation(claim)
+    if relation is None:
+        return []
+    subject, predicate = relation
+    subject = _clean_query(subject)
+    predicate = _clean_query(predicate)
+    if not subject or not predicate:
+        return []
+
+    queries = [
+        f"{subject} facts reliable source",
+        f"{subject} {predicate} true false",
+        f"{subject} known as evidence",
+    ]
+
+    predicate_lower = predicate.lower()
+    if predicate_lower.startswith(("in ", "at ", "located")):
+        queries.insert(0, f"where is {subject} located official source")
+    elif len(predicate.split()) <= 3:
+        queries.insert(0, f"what is {subject} known as")
+
+    return queries
+
+
 def plan_search_queries(claim: str, profile: ClaimProfile | None = None, max_queries: int = 4) -> SearchPlan:
     """Create a small, transparent search plan for a claim.
 
@@ -87,6 +121,8 @@ def plan_search_queries(claim: str, profile: ClaimProfile | None = None, max_que
     profile = profile or detect_claim_type(claim)
     notes: list[str] = []
     queries: list[str] = []
+
+    relation_queries = _relation_queries(claim)
 
     role_claim = profile.current_role_claim
     if role_claim:
@@ -126,6 +162,11 @@ def plan_search_queries(claim: str, profile: ClaimProfile | None = None, max_que
         terms = " ".join(_important_terms(claim))
         queries.extend([claim, f"{terms} official source", f"{claim} fact check"])
         notes.append("General fact claim detected; queries search direct wording and official/source-backed phrasing.")
+
+    if relation_queries:
+        # Insert relation-focused queries near the front, after the user's original claim.
+        queries = [queries[0]] + relation_queries + queries[1:] if queries else relation_queries
+        notes.append("Simple claim relationship detected; added entity-focused searches to reduce keyword-match false positives.")
 
     queries = _dedupe_queries(queries, max_queries=max_queries)
     primary = queries[0] if queries else primary
