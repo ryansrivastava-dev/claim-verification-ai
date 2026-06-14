@@ -36,19 +36,20 @@ The goal is not to be a perfect truth engine. The goal is to make verification t
 ## Live app features
 
 - User enters any public factual claim.
-- System detects the claim category, including time-sensitive claims.
+- System detects the claim category, including climate/environment, health/medical, science/technology, politics/government, business/economics, sports, geography/place, history, entertainment/culture, education, and time-sensitive claims.
 - Query planner creates targeted search queries instead of only searching the raw claim.
 - Evidence is retrieved from public sources at runtime.
 - Sources are ranked with TF-IDF, BM25, or hybrid keyword retrieval.
 - Sources receive credibility signals such as official, scholarly, reference, news, or general web.
 - Evidence passages are summarized using an extractive summarizer.
 - Evidence synthesis explains the overall finding.
-- A freshness guardrail prevents old biography pages from being treated as proof of current facts.
+- A freshness guardrail prevents old biography pages from being treated as proof of current facts. The app now avoids mislabeling climate claims as geography/history just because they mention a location.
 - App returns labels such as:
   - `Likely Supported`
   - `Likely Refuted`
   - `Not Enough Evidence`
 - Users can download a Markdown or PDF fact-check report.
+- The technical details view is readable by default, with raw JSON hidden under an advanced expander.
 - The Streamlit app includes three sections:
   - Live Fact Check
   - Evaluation Results

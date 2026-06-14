@@ -88,8 +88,12 @@ def _display_freshness_guardrail(result: dict) -> None:
             "The claim contains time-sensitive wording. The system gives extra weight to current, official, "
             "or role-specific sources and avoids treating old biography matches as proof of current facts."
         )
-        if profile.get("current_role_claim"):
-            st.json(profile["current_role_claim"])
+        role_claim = profile.get("current_role_claim")
+        if role_claim:
+            role_cols = st.columns(3)
+            role_cols[0].markdown(f"**Claimed holder:** {role_claim.get('subject', 'Unknown')}")
+            role_cols[1].markdown(f"**Role:** {role_claim.get('role', 'Unknown')}")
+            role_cols[2].markdown(f"**Scope:** {role_claim.get('scope') or 'Not specified'}")
     else:
         st.write("Freshness check: not triggered for this claim.")
 
@@ -133,6 +137,71 @@ def _display_evidence(evidence: list[dict]) -> None:
             score_cols[2].metric("Trust", f"{item.get('trust_score', 0.0):.2f}")
             score_cols[3].metric("BM25", f"{item.get('bm25_score', 0.0):.3f}")
             score_cols[4].metric("TF-IDF", f"{item.get('tfidf_score', 0.0):.3f}")
+
+
+def _display_clean_technical_details(result: dict) -> None:
+    """Show technical details in readable fields, with raw JSON hidden."""
+    profile = result.get("claim_profile", {}) or {}
+    search_plan = result.get("search_plan", {}) or {}
+    synthesis = result.get("synthesis", {}) or {}
+
+    st.markdown("### Technical details")
+    st.write("These fields explain how the system processed the claim without exposing raw debug output by default.")
+
+    rows = [
+        ("Retrieval query", result.get("retrieval_query", "N/A")),
+        ("Source mode", result.get("source_mode", "N/A")),
+        ("Claim type", profile.get("category", "N/A")),
+        ("Freshness check", "Required" if profile.get("needs_current_source") else "Not required"),
+        ("Retrieval method", result.get("retrieval_method", "N/A")),
+        ("Evidence strength", synthesis.get("evidence_strength", "N/A")),
+        ("System note", profile.get("reason", "N/A")),
+    ]
+
+    for label, value in rows:
+        st.markdown(f"**{label}:** {value}")
+
+    role_claim = profile.get("current_role_claim")
+    if role_claim:
+        st.markdown("#### Current-role extraction")
+        st.markdown(f"**Claimed holder:** {role_claim.get('subject', 'Unknown')}")
+        st.markdown(f"**Role:** {role_claim.get('role', 'Unknown')}")
+        st.markdown(f"**Scope:** {role_claim.get('scope') or 'Not specified'}")
+
+    generated_queries = search_plan.get("generated_queries", [])
+    if generated_queries:
+        st.markdown("#### Generated search queries")
+        for query in generated_queries:
+            st.markdown(f"- {query}")
+
+    detail_rows = [
+        {
+            "passage_id": item.get("passage_id"),
+            "title": item.get("title"),
+            "source": item.get("source"),
+            "source_category": item.get("source_category"),
+            "trust_label": item.get("trust_label"),
+            "score": item.get("score"),
+            "trust_score": item.get("trust_score"),
+            "planned_query": item.get("planned_query"),
+            "url": item.get("url"),
+        }
+        for item in result.get("top_evidence", [])
+    ]
+    if detail_rows:
+        st.markdown("#### Ranked evidence table")
+        st.dataframe(pd.DataFrame(detail_rows), use_container_width=True)
+
+    with st.expander("Advanced: raw system data", expanded=False):
+        st.json(
+            {
+                "retrieval_query": result.get("retrieval_query"),
+                "source_mode": result.get("source_mode"),
+                "claim_profile": profile,
+                "search_plan": search_plan,
+                "synthesis": synthesis,
+            }
+        )
 
 
 def _display_report_tab(result: dict) -> None:
@@ -335,29 +404,7 @@ def _live_fact_check_tab() -> None:
             _display_report_tab(result)
 
         with tabs[5]:
-            detail_rows = [
-                {
-                    "passage_id": item.get("passage_id"),
-                    "title": item.get("title"),
-                    "source": item.get("source"),
-                    "source_category": item.get("source_category"),
-                    "trust_label": item.get("trust_label"),
-                    "score": item.get("score"),
-                    "trust_score": item.get("trust_score"),
-                    "planned_query": item.get("planned_query"),
-                    "url": item.get("url"),
-                }
-                for item in result["top_evidence"]
-            ]
-            if detail_rows:
-                st.dataframe(pd.DataFrame(detail_rows), use_container_width=True)
-            st.json(
-                {
-                    "retrieval_query": result.get("retrieval_query"),
-                    "source_mode": result.get("source_mode"),
-                    "claim_profile": result.get("claim_profile"),
-                }
-            )
+            _display_clean_technical_details(result)
 
 
 def main(project_root: Path | None = None) -> None:

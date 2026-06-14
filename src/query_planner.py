@@ -107,18 +107,19 @@ def plan_search_queries(claim: str, profile: ClaimProfile | None = None, max_que
         primary = f"{claim} current latest official source"
         queries.extend([primary, f"{claim} latest reliable source", f"{claim} official source"])
         notes.append("Time-sensitive wording detected; queries include current/latest source terms.")
-    elif profile.category == "medical/scientific":
+    elif profile.category in {"health/medical", "science/technology", "climate/environment"}:
         primary = claim
         terms = " ".join(_important_terms(claim))
         queries.extend(
             [
                 claim,
                 f"{terms} scientific evidence study",
-                f"{terms} NIH CDC WHO",
+                f"{terms} official scientific source",
+                f"{terms} NIH CDC WHO NOAA NASA",
                 f"{claim} systematic review evidence",
             ]
         )
-        notes.append("Scientific/medical claim detected; queries prioritize scholarly and health evidence.")
+        notes.append("Science, climate, or health claim detected; queries prioritize scholarly, official, and domain-specific evidence.")
     else:
         primary = claim
         terms = " ".join(_important_terms(claim))

@@ -139,3 +139,27 @@ def test_report_builder_can_make_citation_list_and_pdf_bytes():
     assert "https://en.wikipedia.org/wiki/Paris" in citations
     pdf_bytes = build_pdf_report_bytes(result)
     assert pdf_bytes.startswith(b"%PDF")
+
+
+def test_claim_type_detects_climate_before_geography():
+    profile = detect_claim_type("There is substantial global warming in Texas")
+    assert profile.category == "climate/environment"
+    assert profile.needs_current_source is False
+
+
+def test_claim_type_detects_health_and_science_topics():
+    assert detect_claim_type("High blood pressure increases risk of stroke").category == "health/medical"
+    assert detect_claim_type("NASA launched the James Webb Space Telescope in 2021").category == "science/technology"
+
+
+def test_claim_type_does_not_make_past_office_claim_current():
+    profile = detect_claim_type("Joe Biden voted for the Iraq War")
+    assert profile.needs_current_source is False
+    assert profile.current_role_claim is None
+
+
+def test_claim_type_detects_present_tense_leadership_claim():
+    profile = detect_claim_type("Tim Cook is CEO of Apple")
+    assert profile.needs_current_source is True
+    assert profile.current_role_claim is not None
+    assert profile.current_role_claim.role == "ceo"
