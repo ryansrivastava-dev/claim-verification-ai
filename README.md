@@ -15,15 +15,36 @@ A hybrid retrieval system combining keyword-based retrieval with sentence-embedd
 ## What the project does
 
 - Accepts a user-entered claim.
+- Plans targeted search queries before retrieval.
 - Searches public evidence sources at runtime.
 - Extracts readable evidence passages from retrieved sources.
 - Ranks passages using TF-IDF, BM25, or hybrid retrieval.
+- Summarizes evidence passages and synthesizes the strongest evidence.
+- Performs one conservative re-retrieval pass when evidence is weak.
 - Returns a source-grounded evidence label:
   - `Likely Supported`
   - `Possibly Refuted`
   - `Not Enough Evidence`
-- Shows source titles, URLs, evidence passages, and retrieval scores.
+- Shows source titles, URLs, evidence summaries, retrieval scores, source trust signals, and a downloadable fact-check report.
 - Includes a SciFact research pipeline for dataset loading, preprocessing, retrieval experiments, classification experiments, end-to-end evaluation, error analysis, notebooks, reports, and tests.
+
+
+## Live app workflow
+
+The hosted app now follows a modular verification workflow inspired by modern retrieval-based fact-checking systems:
+
+```text
+Claim analysis
+→ Query planning
+→ Public evidence retrieval
+→ Evidence summarization
+→ Evidence synthesis
+→ Re-retrieval if evidence is weak
+→ Verdict evaluation
+→ Downloadable report
+```
+
+This is still not a guarantee of truth. It is a citation-first system that explains what it found and why it assigned a label. Time-sensitive claims trigger a freshness guardrail so old biography pages are not treated as proof of current facts.
 
 ## Live app evidence sources
 

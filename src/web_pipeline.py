@@ -12,9 +12,17 @@ from typing import Any
 
 try:
     from claim_type_classifier import ClaimProfile, detect_claim_type
+    from evidence_summarizer import summarize_evidence_batch
+    from evidence_synthesizer import synthesize_evidence
+    from query_planner import plan_search_queries
+    from report_builder import build_markdown_report
     from web_retriever import MultiSourceEvidenceRetriever
 except ImportError:  # pragma: no cover
     from src.claim_type_classifier import ClaimProfile, detect_claim_type
+    from src.evidence_summarizer import summarize_evidence_batch
+    from src.evidence_synthesizer import synthesize_evidence
+    from src.query_planner import plan_search_queries
+    from src.report_builder import build_markdown_report
     from src.web_retriever import MultiSourceEvidenceRetriever
 
 
@@ -324,6 +332,48 @@ def predict_from_evidence(
     )
 
 
+
+
+def _dedupe_evidence(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Dedupe evidence from multiple planned queries while preserving score order."""
+    seen: set[str] = set()
+    unique: list[dict[str, Any]] = []
+    for item in sorted(evidence, key=lambda x: float(x.get("score", 0.0)), reverse=True):
+        key = f"{item.get('url', '')}|{item.get('passage_id', '')}|{item.get('text', '')[:80]}".lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(item)
+    return unique
+
+
+def _retrieve_with_plan(
+    retriever: Any,
+    search_plan: Any,
+    method: str,
+    top_k: int,
+    alpha: float,
+    max_pages: int,
+) -> list[dict[str, Any]]:
+    """Run retrieval across a small set of planned queries and merge the results."""
+    all_evidence: list[dict[str, Any]] = []
+    queries = search_plan.generated_queries or [search_plan.primary_query]
+    # Use the first two queries by default to improve quality without making the app too slow.
+    for query in queries[:2]:
+        retrieved = retriever.retrieve(
+            claim=query,
+            method=method,
+            top_k=top_k,
+            alpha=alpha,
+            max_pages=max_pages,
+        )
+        for item in retrieved:
+            enriched = dict(item)
+            enriched["planned_query"] = query
+            all_evidence.append(enriched)
+    return _dedupe_evidence(all_evidence)[:top_k]
+
+
 def run_web_fact_check(
     claim: str,
     method: str = "Hybrid",
@@ -341,20 +391,24 @@ def run_web_fact_check(
         raise ValueError("Claim cannot be empty.")
 
     profile = detect_claim_type(claim)
-    retrieval_query = _build_retrieval_query(claim, profile)
+    search_plan = plan_search_queries(claim, profile=profile, max_queries=4)
+    retrieval_query = search_plan.primary_query or _build_retrieval_query(claim, profile)
 
     retriever = retriever or MultiSourceEvidenceRetriever(
         use_web=use_web,
         use_wikipedia=use_wikipedia,
         use_openalex=use_openalex,
     )
-    evidence = retriever.retrieve(
-        claim=retrieval_query,
+
+    evidence = _retrieve_with_plan(
+        retriever=retriever,
+        search_plan=search_plan,
         method=method,
         top_k=top_k,
         alpha=alpha,
         max_pages=max_pages,
     )
+
     label, confidence, explanation = predict_from_evidence(claim, evidence, profile=profile)
 
     if profile.needs_current_source:
@@ -362,27 +416,78 @@ def run_web_fact_check(
             f"{explanation} Freshness guardrail applied: old biography matches are not enough for time-sensitive claims."
         )
 
-    return {
+    summarized_evidence = summarize_evidence_batch(claim, evidence, max_items=max(8, top_k))
+    synthesis = synthesize_evidence(
+        claim=claim,
+        evidence=summarized_evidence,
+        predicted_label=label,
+        confidence=confidence,
+        explanation=explanation,
+        profile=profile,
+    )
+
+    # One targeted re-retrieval pass when the first evidence set is weak. This mirrors
+    # human fact-checking without creating an expensive or infinite search loop.
+    if synthesis.needs_more_search and synthesis.rereview_query and retriever is not None:
+        second_pass = retriever.retrieve(
+            claim=synthesis.rereview_query,
+            method=method,
+            top_k=top_k,
+            alpha=alpha,
+            max_pages=max(2, max_pages // 2),
+        )
+        if second_pass:
+            evidence = _dedupe_evidence(evidence + second_pass)[:top_k]
+            label, confidence, explanation = predict_from_evidence(claim, evidence, profile=profile)
+            if profile.needs_current_source:
+                explanation = (
+                    f"{explanation} Freshness guardrail applied: old biography matches are not enough for time-sensitive claims."
+                )
+            summarized_evidence = summarize_evidence_batch(claim, evidence, max_items=max(8, top_k))
+            synthesis = synthesize_evidence(
+                claim=claim,
+                evidence=summarized_evidence,
+                predicted_label=label,
+                confidence=confidence,
+                explanation=explanation,
+                profile=profile,
+            )
+
+    profile_dict = {
+        "category": profile.category,
+        "needs_current_source": profile.needs_current_source,
+        "reason": profile.reason,
+        "current_role_claim": (
+            None
+            if profile.current_role_claim is None
+            else {
+                "subject": profile.current_role_claim.subject,
+                "role": profile.current_role_claim.role,
+                "scope": profile.current_role_claim.scope,
+            }
+        ),
+    }
+
+    result = {
         "claim": claim,
         "retrieval_query": retrieval_query,
         "predicted_label": label,
         "confidence": confidence,
         "explanation": explanation,
-        "claim_profile": {
-            "category": profile.category,
-            "needs_current_source": profile.needs_current_source,
-            "reason": profile.reason,
-            "current_role_claim": (
-                None
-                if profile.current_role_claim is None
-                else {
-                    "subject": profile.current_role_claim.subject,
-                    "role": profile.current_role_claim.role,
-                    "scope": profile.current_role_claim.scope,
-                }
-            ),
-        },
+        "claim_profile": profile_dict,
+        "search_plan": search_plan.to_dict(),
         "retrieval_method": method,
-        "top_evidence": evidence,
+        "top_evidence": summarized_evidence,
+        "synthesis": synthesis.to_dict(),
+        "workflow_steps": [
+            {"step": "Claim analysis", "status": "complete", "detail": profile.reason},
+            {"step": "Query planning", "status": "complete", "detail": retrieval_query},
+            {"step": "Evidence retrieval", "status": "complete", "detail": f"Retrieved {len(evidence)} ranked evidence passages."},
+            {"step": "Evidence summarization", "status": "complete", "detail": f"Summarized {len(summarized_evidence)} passages."},
+            {"step": "Evidence synthesis", "status": "complete", "detail": synthesis.evidence_strength},
+            {"step": "Verdict evaluation", "status": "complete", "detail": label},
+        ],
         "source_mode": "Live public evidence retrieval",
     }
+    result["fact_check_report"] = build_markdown_report(result)
+    return result

@@ -76,3 +76,25 @@ def test_current_role_claim_does_not_treat_old_biography_as_current_support():
     assert label == "Likely Refuted"
     assert confidence > 0.5
     assert "past" in explanation.lower() or "former" in explanation.lower()
+
+
+def test_web_pipeline_includes_modular_workflow_outputs():
+    result = run_web_fact_check(
+        "The capital of France is Paris.",
+        retriever=FakeRetriever(),
+    )
+    assert "search_plan" in result
+    assert "workflow_steps" in result
+    assert "synthesis" in result
+    assert "fact_check_report" in result
+    assert "Evidence-Based Fact Verification Report" in result["fact_check_report"]
+    assert result["top_evidence"][0]["summary"]
+
+
+def test_search_plan_rewrites_current_role_claim():
+    from src.query_planner import plan_search_queries
+
+    profile = detect_claim_type("Joe Biden is the current president")
+    plan = plan_search_queries("Joe Biden is the current president", profile=profile)
+    assert "current president" in plan.primary_query.lower()
+    assert "official" in plan.primary_query.lower()
