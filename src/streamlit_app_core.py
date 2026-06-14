@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import html
 
 import pandas as pd
 import streamlit as st
@@ -13,6 +14,37 @@ try:
 except ImportError:  # pragma: no cover
     from src.report_builder import build_citation_list, build_pdf_report_bytes
     from src.web_pipeline import run_web_fact_check
+
+
+def _display_result_summary(result: dict) -> None:
+    """Render final result fields without Streamlit metric truncation."""
+    label = str(result.get("predicted_label", "Unknown"))
+    confidence = result.get("confidence", 0.0)
+    category = str(result.get("claim_profile", {}).get("category", "Unknown"))
+    strength = str(result.get("synthesis", {}).get("evidence_strength", "Unknown"))
+    freshness = "On" if result.get("claim_profile", {}).get("needs_current_source") else "Off"
+
+    cards = [
+        ("Evidence label", label),
+        ("Confidence signal", f"{confidence:.2f}" if isinstance(confidence, (int, float)) else str(confidence)),
+        ("Claim type", category),
+        ("Evidence strength", strength),
+        ("Freshness check", freshness),
+    ]
+
+    card_html_parts = []
+    for name, value in cards:
+        card_html_parts.append(
+            "<div class='result-card'>"
+            f"<div class='result-label'>{html.escape(name)}</div>"
+            f"<div class='result-value'>{html.escape(value)}</div>"
+            "</div>"
+        )
+
+    st.markdown(
+        "<div class='result-grid'>" + "".join(card_html_parts) + "</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def _display_workflow(result: dict) -> None:
@@ -271,12 +303,7 @@ def _live_fact_check_tab() -> None:
             return
 
         st.subheader("Result")
-        col1, col2, col3, col4, col5 = st.columns(5)
-        col1.metric("Evidence label", result["predicted_label"])
-        col2.metric("Confidence signal", f"{result['confidence']:.2f}")
-        col3.metric("Claim type", result["claim_profile"]["category"])
-        col4.metric("Evidence strength", result.get("synthesis", {}).get("evidence_strength", "Unknown"))
-        col5.metric("Freshness check", "On" if result["claim_profile"].get("needs_current_source") else "Off")
+        _display_result_summary(result)
 
         st.write("**Explanation:**", result["explanation"])
         st.caption(result["claim_profile"]["reason"])
@@ -340,6 +367,50 @@ def main(project_root: Path | None = None) -> None:
         page_title="Evidence-Based Fact Verification",
         page_icon="🔎",
         layout="wide",
+    )
+
+    st.markdown(
+        """
+        <style>
+        .result-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 1rem;
+            margin: 0.75rem 0 1.25rem 0;
+        }
+        .result-card {
+            border: 1px solid rgba(128, 128, 128, 0.35);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            min-height: 120px;
+            background: rgba(128, 128, 128, 0.06);
+        }
+        .result-label {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 0.55rem;
+            opacity: 0.92;
+        }
+        .result-value {
+            font-size: 1.65rem;
+            line-height: 1.18;
+            font-weight: 500;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+        div[data-testid="stMetricValue"] {
+            white-space: normal !important;
+            overflow-wrap: anywhere !important;
+            word-break: break-word !important;
+            line-height: 1.15 !important;
+        }
+        div[data-testid="stMetricLabel"] {
+            white-space: normal !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
     st.title("Evidence-Based Fact Verification")
