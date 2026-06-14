@@ -1,183 +1,171 @@
-# Evidence-Grounded Claim Verification AI
+# Evidence-Based Fact Verification AI: A Modular Web-Grounded Claim Verification System
 
 ## Abstract
 
-Scientific misinformation can spread quickly, and AI systems that answer scientific questions need to show evidence rather than only produce confident-sounding responses. This project builds a lightweight scientific claim verification system that takes a claim, retrieves evidence passages from a scientific corpus, and predicts whether the claim is supported, refuted, or not enough information based on available labels. The research question is whether hybrid retrieval, which combines sparse keyword retrieval and dense sentence-embedding retrieval, improves evidence quality and end-to-end claim verification performance compared with either method alone. The system compares TF-IDF, BM25, dense retrieval with Sentence-Transformers, and a BM25 + dense hybrid retriever. It also trains lightweight classifiers using TF-IDF features and sentence embeddings. Evaluation includes Recall@k, Precision@k, MRR, accuracy, macro F1, per-class F1, and confusion matrices when the dataset format supports those metrics. Final results will be filled in after running the included experiment scripts; no metrics are reported here until they are computed from real data.
+This project presents a modular, evidence-grounded system for public claim verification. Given a claim, the system plans search queries, retrieves live public evidence, ranks sources using relevance and credibility signals, summarizes evidence passages, checks claim-evidence entailment, synthesizes findings, and produces a citation-backed verdict. The project compares sparse retrieval methods such as TF-IDF and BM25, hybrid keyword retrieval, source credibility weighting, and an entailment layer designed to prevent related evidence from being mistaken for direct support. The system includes a Streamlit application and reproducible evaluation scripts for benchmark accuracy, macro F1, ablation studies, McNemar significance testing, entailment precision/recall, confidence calibration, and error analysis. Results should be filled only after running the included scripts on labeled benchmark data. The project is intended as a transparent research prototype, not a replacement for expert fact-checking.
 
 ## 1. Introduction
 
-Scientific claim verification is the task of checking whether a claim is supported, contradicted, or not proven by available scientific evidence. This matters because many AI systems can generate fluent answers without grounding them in reliable evidence. For scientific and medical topics, this can be especially risky because users may confuse a confident answer with a true answer.
+Misinformation spreads quickly online, and many claims require evidence-based verification rather than unsupported model-generated answers. Automated fact-checking systems can help users inspect public evidence, but they must be transparent about sources, uncertainty, and limitations. This project builds a modular claim verification system that focuses on evidence retrieval and explainability.
 
-This project focuses on evidence-grounded AI. Instead of only predicting a label, the system retrieves the passages that influenced the prediction. This makes the model easier to inspect and helps identify whether an error came from poor retrieval, poor classification, or ambiguous evidence.
+The central research question is:
 
-## 2. Research Question and Hypothesis
+> How do sparse retrieval, dense retrieval, and hybrid retrieval affect the accuracy and explainability of an AI system for claim verification?
 
-**Research question:** How do sparse retrieval, dense retrieval, and hybrid retrieval affect the accuracy and explainability of an AI system for scientific claim verification?
+The hypothesis is that hybrid retrieval and source-aware ranking can improve evidence quality compared with single-method retrieval, and that an entailment layer can reduce false positives from merely related evidence.
 
-**Hypothesis:** A hybrid retrieval system combining keyword-based retrieval with sentence-embedding retrieval will retrieve better evidence and improve end-to-end claim verification performance compared with either retrieval method alone.
+## 2. Related Work
 
-## 3. Background
+Automated fact-checking builds on evidence retrieval, natural language inference, and claim classification. SciFact focuses on scientific claim verification. FEVER introduced large-scale fact verification against Wikipedia evidence. AVeriTeC focuses on real-world claim verification using web evidence. LIAR provides short political claims labeled for truthfulness. Recent systems use retrieval-augmented generation and modular fact-checking pipelines to improve interpretability.
 
-**Sparse retrieval** represents text using word-based features. TF-IDF and BM25 are sparse retrieval methods because they mainly depend on token overlap between a claim and evidence passage. These methods are strong baselines because they are fast, interpretable, and often effective when claims share important terms with the evidence.
+This project is inspired by those directions but remains a lightweight, reproducible research prototype suitable for normal development environments. It does not claim state-of-the-art performance unless evaluation results are generated and compared under matching conditions.
 
-**Dense retrieval** represents text using learned vector embeddings. A sentence embedding model can place semantically similar claims and evidence close together even when they use different wording. This can help with paraphrases, but dense retrieval can also retrieve semantically related passages that do not directly prove or disprove the claim.
+## 3. System Design
 
-**Hybrid retrieval** combines sparse and dense signals. The goal is to keep the precision and interpretability of keyword matching while adding semantic matching for claims that use different wording than the evidence.
-
-**Claim verification** combines retrieval and classification. The original scientific pipeline is:
+The system follows this pipeline:
 
 ```text
-Claim → Evidence Retrieval → Claim/Evidence Classification → Prediction + Evidence
+Claim → Claim Type Detection → Query Planning → Evidence Retrieval → Source Credibility Scoring → Evidence Summarization → Evidence Synthesis → Entailment Checking → Verdict + Report
 ```
 
-The live web-grounded app adds a conservative entailment step after retrieval. This step checks whether a retrieved passage directly supports, contradicts, or is neutral toward the exact claim. This helps reduce false positives where a source mentions the same entities but does not actually prove the relationship stated in the claim.
+### Claim type detection
 
-## 4. Dataset
+The claim type detector identifies broad topics such as health/medical, climate/environment, politics/government, business/economics, sports, geography/place, history, and current public office/leadership claims. This helps the search planner produce better queries and helps the interface explain how the claim was processed.
 
-The preferred dataset is SciFact, a scientific claim verification dataset. The included data loading script attempts to load SciFact through Hugging Face Datasets and saves processed claims and evidence passages into `data/processed/`.
+### Query planning
 
-Dataset size, split counts, label distribution, and evidence passage counts should be reported only after running:
+The query planner generates multiple evidence-seeking queries rather than searching only the raw claim. For simple subject-predicate claims, it can generate entity-focused queries to look for canonical facts and counter-evidence.
+
+### Evidence retrieval
+
+The live app retrieves from public sources including general web search, Wikipedia, and OpenAlex. The original research pipeline also includes SciFact loading, preprocessing, sparse retrieval, dense retrieval, hybrid retrieval, classifier training, and evaluation.
+
+### Source credibility scoring
+
+Each source receives a transparent trust signal based on source type, such as official/government/institutional, scholarly, reference, health reference, news, or general web. This score is blended with retrieval relevance in the live ranking. The source credibility component is evaluated separately in ablation studies.
+
+### Entailment layer
+
+The entailment layer checks whether evidence supports, contradicts, or is neutral toward the claim. This is included because retrieval relevance alone can mistake related sources for supporting evidence. For example, a source that mentions Mars and blue sunsets should not support the claim “Mars is blue.”
+
+### Evidence synthesis and report generation
+
+The system synthesizes retrieved evidence into a short analysis and generates a downloadable report containing the claim, label, confidence, search plan, evidence summaries, citations, and limitations.
+
+## 4. Experiments
+
+The project includes scripts for four main experiments.
+
+### 4.1 Verdict benchmark
+
+Run:
 
 ```bash
-python src/load_data.py
+python src/evaluate_realworld_benchmark.py --input data/raw/benchmark_claims.csv --limit 20
 ```
 
-The script writes the actual computed statistics to:
+Metrics:
 
-```text
-data/processed/dataset_summary.json
+- Accuracy
+- Macro F1
+- Per-class F1
+- Confusion matrix
+
+### 4.2 Retrieval and credibility ablation
+
+Run:
+
+```bash
+python src/evaluate_ablation_study.py --input data/raw/benchmark_claims.csv --limit 20
 ```
 
-If the dataset fails to load, the script writes a failure report to:
+This compares:
 
-```text
-data/processed/LOAD_FAILED.md
+- TF-IDF only
+- BM25 only
+- Hybrid alpha 0.25
+- Hybrid alpha 0.50
+- Hybrid alpha 0.75
+- Hybrid with no source credibility weighting
+- Hybrid with stronger source credibility weighting
+
+The script also writes exact McNemar tests comparing paired correctness across systems.
+
+### 4.3 Entailment evaluation
+
+Run:
+
+```bash
+python src/evaluate_entailment_layer.py --input data/raw/entailment_pairs.csv
 ```
 
-No dataset statistics are invented in this draft.
+Metrics:
 
-## 5. Methodology
+- Macro precision
+- Macro recall
+- Macro F1
+- Entailment confusion matrix
 
-The system has three major stages.
+### 4.4 Confidence calibration
 
-First, the project loads and preprocesses claims and scientific documents. Documents are split into passages or sentence-like chunks so retrieval can return specific evidence rather than entire papers.
+Run:
 
-Second, the system retrieves evidence for each claim using several methods:
-
-- TF-IDF cosine similarity
-- BM25 keyword retrieval
-- Dense retrieval with `all-MiniLM-L6-v2`
-- Hybrid retrieval using normalized BM25 and dense scores
-
-The hybrid score is:
-
-```text
-hybrid_score = alpha * bm25_score + (1 - alpha) * dense_score
+```bash
+python src/plot_confidence_calibration.py --input reports/benchmark_predictions.csv
 ```
 
-Third, the system trains classifiers that take the claim plus retrieved or gold evidence text as input. The included classifiers are logistic regression with TF-IDF features and a sentence-embedding classifier.
+The calibration plot compares predicted confidence against observed accuracy.
 
-## 6. Experiments
+## 5. Results
 
-### Retrieval experiments
+Results must be filled after running the evaluation scripts. Do not fabricate metrics.
 
-The retrieval experiments compare TF-IDF, BM25, dense retrieval, and hybrid retrieval. When gold evidence document IDs are available, the project computes Recall@1, Recall@3, Recall@5, Recall@10, Precision@k, and Mean Reciprocal Rank.
+| Experiment | Metric | Result |
+|---|---:|---:|
+| Verdict benchmark | Accuracy | TBD |
+| Verdict benchmark | Macro F1 | TBD |
+| Best ablation config | Macro F1 | TBD |
+| Entailment layer | Macro F1 | TBD |
+| Calibration | Notes | TBD |
 
-### Classification experiments
+## 6. Error Analysis
 
-The classification experiments train lightweight models to predict `SUPPORTED`, `REFUTED`, or `NOT_ENOUGH_INFO` when labels are available. The project reports accuracy, macro F1, per-class F1, and confusion matrices.
-
-### End-to-end experiments
-
-The end-to-end experiments compare complete systems:
-
-- TF-IDF retrieval + classifier
-- BM25 retrieval + classifier
-- Dense retrieval + classifier
-- Hybrid retrieval + classifier
-
-These experiments test whether better retrieval improves the final claim verification result.
-
-## 7. Results
-
-Results should be filled in only after running the experiment scripts.
-
-### Retrieval results
-
-Placeholder: Insert the table from `data/processed/retrieval_results.csv`.
-
-Placeholder: Insert the chart from `reports/figures/retrieval_comparison.png`.
-
-### Classifier results
-
-Placeholder: Insert the table from `data/processed/classifier_results.csv`.
-
-Placeholder: Insert confusion matrix figures from `reports/figures/`.
-
-### End-to-end results
-
-Placeholder: Insert the table from `data/processed/pipeline_results.csv`.
-
-Placeholder: Insert the chart from `reports/figures/pipeline_comparison.png`.
-
-No conclusions should claim that one method is best until these metrics are computed from real experiment runs.
-
-## 8. Error Analysis
-
-Mistakes are reviewed using `src/error_analysis.py`, which creates a CSV of incorrect predictions. The suggested categories are:
+The error analysis should categorize failures into:
 
 - Retrieval failure
-- Classification failure
+- Source credibility failure
+- Entailment failure
 - Ambiguous claim
+- Current-context failure
 - Insufficient evidence
-- Label confusion
+- Label mapping issue
 
-Automatic error categories are only a starting point. Final error analysis should include manual review because the reason for an incorrect prediction may not be obvious from scores alone.
+The project includes `reports/error_analysis.md` and scripts to create prediction-level outputs for manual review.
 
-## 9. Discussion
+## 7. Discussion
 
-The main purpose of this project is to understand how retrieval quality affects claim verification. If hybrid retrieval improves Recall@k and end-to-end macro F1, that would support the hypothesis that combining lexical and semantic signals improves evidence grounding. If it does not improve performance, the error analysis may show that classification errors, dataset ambiguity, or noisy evidence matching are limiting the system.
+The key research value of this project is not simply the final label. It is the ability to inspect how retrieval, source quality, and entailment influence the final verdict. Hybrid retrieval can improve ranking quality, but it must be evaluated against BM25 and TF-IDF on the same benchmark. Source credibility weighting is useful only if ablation results show improved accuracy or better error behavior. The entailment layer is a major contribution because it addresses a common failure mode in retrieval-based fact-checking: related evidence being treated as support.
 
-Explainability is also important. Sparse retrieval scores are easier to interpret because they are based on word overlap. Dense retrieval can find paraphrases but can be harder to explain. Hybrid retrieval may provide a practical balance between performance and interpretability.
+## 8. Limitations
 
-## 10. Limitations
+- Live web retrieval changes over time, making exact reproducibility difficult.
+- Small benchmarks can overstate performance.
+- Source credibility scoring is heuristic and must be evaluated.
+- The entailment layer can fail on complex phrasing.
+- Confidence scores should not be interpreted as probabilities unless calibrated.
+- The app is not appropriate as a final authority for medical, legal, financial, or high-stakes decisions.
 
-This project is not a medical or scientific truth engine. It is a research prototype. It depends on the dataset, the retrieved evidence, and the classifier. It can make incorrect predictions.
+## 9. Conclusion
 
-Other limitations include:
+This project builds a modular, transparent claim verification system that retrieves live evidence, ranks source credibility, checks entailment, synthesizes findings, and generates citation-backed reports. The strongest next step is to run larger public benchmark evaluations and use the resulting metrics to test the project’s central hypothesis about hybrid retrieval and evidence quality.
 
-- Dataset coverage may not include all scientific claims.
-- Some evidence may be ambiguous or require full-paper context.
-- Evidence annotations may not perfectly match sentence-level passages.
-- The project uses laptop-friendly models rather than large transformer fine-tuning.
-- Confidence scores are not proof of truth.
-- The system should support human judgment, not replace it.
+## References
 
-## 11. Conclusion
-
-This project builds a complete evidence-grounded scientific claim verification system. It compares sparse, dense, and hybrid retrieval methods; trains lightweight classifiers; evaluates retrieval and classification metrics; includes an end-to-end pipeline; and provides tools for error analysis and interactive app use. The project demonstrates how retrieval choices can affect trustworthy AI systems and why evidence inspection is important for scientific claims.
-
-## 12. References
-
-- Wadden, D., Lin, S., Lo, K., Wang, L. L., van Zuylen, M., Cohan, A., & Hajishirzi, H. (2020). Fact or Fiction: Verifying Scientific Claims. *Proceedings of EMNLP*.
-- Reimers, N., & Gurevych, I. (2019). Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks. *Proceedings of EMNLP-IJCNLP*.
-- Robertson, S., & Zaragoza, H. (2009). The Probabilistic Relevance Framework: BM25 and Beyond. *Foundations and Trends in Information Retrieval*.
-- Pedregosa, F., Varoquaux, G., Gramfort, A., et al. (2011). Scikit-learn: Machine Learning in Python. *Journal of Machine Learning Research*.
-- Lhoest, Q., del Moral, A. V., Jernite, Y., et al. (2021). Datasets: A Community Library for Natural Language Processing. *Proceedings of EMNLP System Demonstrations*.
-- Wolf, T., Debut, L., Sanh, V., et al. (2020). Transformers: State-of-the-Art Natural Language Processing. *Proceedings of EMNLP System Demonstrations*.
-
-## Streamlit App Extension
-
-The updated hosted app extends the original scientific claim verification project into a broader evidence-grounded claim verification interface. Instead of requiring a preprocessed SciFact file before the app can start, the deployed app retrieves public evidence from general web search, Wikipedia through the MediaWiki API, and OpenAlex scholarly works. This makes the app functional immediately on Streamlit Community Cloud without paid APIs or private keys.
-
-This extension does not mean the system can verify all real-world facts. It works best for public, well-documented claims and is weaker for private, local, very recent, or disputed claims. The app therefore reports an evidence signal and shows source links rather than presenting the prediction as absolute truth.
-
-The live app uses TF-IDF, BM25, and hybrid keyword retrieval so it can run without a GPU. The full research repository also includes dense retrieval and SciFact experiment scripts for benchmark-style evaluation.
-
-## Addendum: Modular Web-Grounded Fact Verification Upgrade
-
-The deployed version of the project extends the original scientific claim verification pipeline into a broader web-grounded fact verification prototype. The app now follows a modular workflow: claim type detection, query planning, live evidence retrieval, source ranking, evidence summarization, claim-evidence entailment checking, counter-evidence retrieval for weak matches, evidence synthesis, current-context handling for time-sensitive claims, final evidence labeling, and report generation.
-
-This upgrade improves explainability because users can inspect the search plan, retrieved sources, source-quality signals, evidence summaries, synthesis, and citations. The system also includes an entailment layer to reduce false positives caused by related-but-not-supporting evidence, plus a benchmark evaluation script that can compute accuracy, macro F1, per-class metrics, and confusion matrices from a labeled CSV. These results are intentionally not filled in until the evaluation is actually run.
-
-The system remains a research prototype. It does not guarantee truth, and it can fail when public evidence is incomplete, outdated, misleading, or ambiguous. Its purpose is to support human evidence review by making retrieval and reasoning steps visible.
+- Wadden et al. SciFact: Verifying Scientific Claims.
+- Thorne et al. FEVER: a Large-scale Dataset for Fact Extraction and VERification.
+- Schlichtkrull et al. AVeriTeC: A Dataset for Real-world Claim Verification with Evidence from the Web.
+- Wang. LIAR, LIAR Pants on Fire: A New Benchmark Dataset for Fake News Detection.
+- Robertson and Zaragoza. The Probabilistic Relevance Framework: BM25 and Beyond.
+- Reimers and Gurevych. Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks.
+- Pedregosa et al. Scikit-learn: Machine Learning in Python.
+- Hugging Face Datasets documentation.

@@ -343,6 +343,7 @@ class MultiSourceEvidenceRetriever:
         top_k: int = 5,
         alpha: float = 0.5,
         max_pages: int = 6,
+        trust_weight: float = 0.15,
     ) -> list[dict[str, Any]]:
         """Retrieve and rank top evidence passages."""
         documents = [document.__dict__ for document in self.search_documents(claim, max_sources=max_pages)]
@@ -375,7 +376,10 @@ class MultiSourceEvidenceRetriever:
 
         trust_scores = passage_df["trust_score"].astype(float).to_numpy()
         final_scores = np.array(
-            [blend_relevance_and_trust(rel, trust) for rel, trust in zip(relevance_scores, trust_scores)]
+            [
+                blend_relevance_and_trust(rel, trust, trust_weight=trust_weight)
+                for rel, trust in zip(relevance_scores, trust_scores)
+            ]
         )
 
         top_indices = np.argsort(final_scores)[::-1][:top_k]

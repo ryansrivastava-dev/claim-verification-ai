@@ -6,58 +6,66 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-research%20prototype-orange)
 
-A modular AI fact-checking system that verifies claims using live public evidence, source ranking, claim-evidence entailment checking, evidence summarization, evidence synthesis, time-sensitive claim handling, and transparent citation-backed reports.
+A modular AI fact-checking system that verifies public factual claims using live evidence retrieval, source credibility scoring, claim-evidence entailment checking, evidence synthesis, current-context handling, benchmark evaluation scripts, and citation-backed reports.
 
-The project began as **Hybrid Retrieval for Scientific Claim Verification** and expanded into a broader web-grounded verification system. It still includes the SciFact research pipeline, while the deployed Streamlit app checks public claims using live evidence retrieval and citation-backed reports.
+This project began as **Hybrid Retrieval for Scientific Claim Verification** and expanded into a broader web-grounded verification system. It still includes the original SciFact research pipeline, while the deployed Streamlit app checks public claims using live sources.
 
 ---
 
-## Why this project is special
+## Project summary
 
-Most simple fact-checking apps do one search and return a label. This project uses a modular workflow that is closer to real automated fact-checking research:
+The system is designed around one research question:
+
+> How do sparse retrieval, dense retrieval, and hybrid retrieval affect the accuracy and explainability of an AI system for claim verification?
+
+The current app implements a live modular pipeline:
 
 ```text
 Claim
 → Claim type detection
 → Query planning
-→ Counter-evidence query planning for simple fact claims
 → Live public evidence retrieval
 → Source credibility scoring
 → Evidence summarization
 → Evidence synthesis
-→ Claim-evidence entailment check
+→ Claim-evidence entailment checking
 → Current-context handling for time-sensitive claims
-→ Evidence-backed verdict
-→ Downloadable citation report
+→ Verdict + citations + downloadable report
 ```
 
-The goal is not to be a perfect truth engine. The goal is to make verification transparent: the app shows what it searched, what it found, how sources were ranked, and why it produced a label.
+The goal is not to be a perfect truth engine. The goal is to make verification transparent by showing the search plan, retrieved evidence, source quality signals, entailment decisions, and final reasoning.
+
+---
+
+## What makes this project different
+
+- **Modular fact-checking workflow:** separates query planning, retrieval, ranking, summarization, synthesis, entailment checking, and verdict generation.
+- **Live evidence retrieval:** retrieves public evidence at runtime instead of relying only on model memory.
+- **Hybrid retrieval:** compares TF-IDF, BM25, and hybrid keyword ranking in the live app, with dense retrieval included in the research pipeline.
+- **Claim-evidence entailment layer:** reduces false positives where a source is related to a claim but does not actually support it.
+- **Source credibility scoring:** labels sources as official/institutional, scholarly, reference, health reference, news, or general web.
+- **Current-context handling:** prevents old biography pages from being treated as proof of current facts.
+- **Downloadable reports:** exports Markdown and PDF reports with citations.
+- **Research evaluation support:** includes benchmark, ablation, entailment, calibration, and error-analysis scripts.
 
 ---
 
 ## Live app features
 
-- User enters any public factual claim.
-- System detects the claim category, including climate/environment, health/medical, science/technology, politics/government, business/economics, sports, geography/place, history, entertainment/culture, education, and time-sensitive claims.
-- Query planner creates targeted search queries instead of only searching the raw claim, including entity-focused follow-up queries for simple subject-predicate claims.
-- Evidence is retrieved from public sources at runtime.
-- Sources are ranked with TF-IDF, BM25, or hybrid keyword retrieval, then checked against the claim using an entailment layer.
-- Sources receive credibility signals such as official, scholarly, reference, news, or general web.
-- Evidence passages are summarized using an extractive summarizer.
-- Evidence synthesis explains the overall finding.
-- Claim-evidence entailment checking helps prevent related sources from being mistaken for direct support, and flags clear contradictions when evidence establishes the opposite relationship.
-- Current-context handling prevents old biography pages from being treated as proof of current facts. The app now avoids mislabeling climate claims as geography/history just because they mention a location.
-- App returns labels such as:
-  - `Supported by Evidence`
-  - `Contradicted by Evidence`
-  - `Conflicting Evidence`
-  - `Not Enough Evidence`
-- Users can download a Markdown or PDF fact-check report.
-- The technical details view is readable by default, with raw JSON hidden under an advanced expander.
-- The Streamlit app includes three sections:
-  - Live Fact Check
-  - Evaluation Results
-  - Project Architecture
+- Enter a public factual claim.
+- Choose ranking method: `Hybrid`, `BM25`, or `TF-IDF`.
+- Enable/disable public evidence sources: general web, Wikipedia, and OpenAlex.
+- View the system's search plan and verification workflow.
+- Inspect evidence cards with source type, trust signal, relevance, summary, and entailment label.
+- Download a Markdown or PDF fact-check report.
+- View benchmark/evaluation outputs after running evaluation scripts.
+
+The app returns labels such as:
+
+- `Supported by Evidence`
+- `Contradicted by Evidence`
+- `Conflicting Evidence`
+- `Not Enough Evidence`
 
 ---
 
@@ -69,74 +77,62 @@ The goal is not to be a perfect truth engine. The goal is to make verification t
 
 ## Evidence sources
 
-The deployed app retrieves evidence live from public sources:
+The app retrieves evidence live from:
 
-- **General web search** using DuckDuckGo-compatible search packages when available.
-- **Wikipedia** through the public MediaWiki API.
-- **OpenAlex** for scholarly/scientific works.
+- General web search through DuckDuckGo-compatible search packages when available.
+- Wikipedia through the public MediaWiki API.
+- OpenAlex for scholarly/scientific works.
 
-The system can check many public, documented claims. It cannot guarantee verification of private, undocumented, hyper-local, very recent, or disputed claims.
-
----
-
-## Research question
-
-How do sparse retrieval, dense retrieval, and hybrid retrieval affect the accuracy and explainability of an AI system for claim verification?
-
-## Hypothesis
-
-A hybrid retrieval system combining keyword-based retrieval with sentence-embedding retrieval will retrieve better evidence and improve end-to-end claim verification performance compared with either retrieval method alone.
+The system works best for documented public claims. It cannot reliably verify private, undocumented, hyper-local, very recent, or highly disputed claims.
 
 ---
 
 ## Methods compared
 
-### Sparse retrieval
+### TF-IDF retrieval
 
-- **TF-IDF:** Converts claims and evidence passages into weighted keyword vectors.
-- **BM25:** A strong keyword-search baseline commonly used in information retrieval.
+A sparse keyword baseline that converts claims and evidence passages into weighted term vectors.
 
-### Dense retrieval
+### BM25 retrieval
 
-- Uses Sentence-Transformers such as `all-MiniLM-L6-v2` for semantic evidence search in the full research pipeline.
+A classic information retrieval method that ranks documents by keyword relevance.
 
 ### Hybrid retrieval
 
-The live app combines BM25 and TF-IDF:
+The live app uses:
 
 ```text
 hybrid_score = alpha * bm25_score + (1 - alpha) * tfidf_score
 ```
 
-The research pipeline also includes dense retrieval code for scientific claim verification experiments.
+Source credibility is then blended into the ranking with a configurable trust weight.
+
+### Dense retrieval
+
+The research pipeline includes Sentence-Transformers dense retrieval for SciFact-style experiments. The live app prioritizes lightweight deployment.
+
+### Entailment checking
+
+The entailment layer classifies claim-evidence relationships as:
+
+- `entailment`
+- `contradiction`
+- `neutral`
+
+This helps distinguish direct support from merely related evidence.
 
 ---
 
-## Evaluation
+## Evaluation plan
 
-This repository does **not** fabricate results. Metrics should only be added after running evaluation scripts.
+This repository does **not** fabricate results. Metrics should only be reported after running scripts on labeled data.
 
-Metrics supported:
+### 1. Verdict benchmark
 
-- Accuracy
-- Macro F1
-- Per-class F1
-- Confusion matrix
-- Evidence retrieval quality when gold evidence is available
-- Recall@k and MRR for retrieval experiments
-
-Run live benchmark evaluation with a labeled CSV:
+Uses a CSV with `claim,label` columns.
 
 ```bash
-python src/evaluate_realworld_benchmark.py --input data/raw/benchmark_claims.csv --limit 50
-```
-
-Expected CSV format:
-
-```csv
-claim,label
-"The capital of France is Paris.",Supported
-"The Eiffel Tower is located in Berlin.",Refuted
+python src/evaluate_realworld_benchmark.py --input data/raw/benchmark_claims.csv --limit 20
 ```
 
 Outputs:
@@ -144,30 +140,108 @@ Outputs:
 ```text
 reports/benchmark_predictions.csv
 reports/benchmark_metrics.json
+reports/classification_report.csv
 reports/evaluation_summary.csv
 reports/figures/confusion_matrix.png
 ```
 
-The Streamlit app automatically displays these files in the **Evaluation Results** tab when they exist.
+### 2. Retrieval and credibility ablation
+
+Compares TF-IDF, BM25, hybrid alpha values, and source credibility weighting.
+
+```bash
+python src/evaluate_ablation_study.py --input data/raw/benchmark_claims.csv --limit 20
+```
+
+Outputs:
+
+```text
+reports/ablation_predictions.csv
+reports/ablation_results.csv
+reports/significance_tests.csv
+reports/figures/ablation_macro_f1.png
+```
+
+The significance file uses an exact McNemar test for paired system comparisons.
+
+### 3. Entailment layer evaluation
+
+Uses a CSV with `claim,evidence,label` columns.
+
+```bash
+python src/evaluate_entailment_layer.py --input data/raw/entailment_pairs.csv
+```
+
+Outputs:
+
+```text
+reports/entailment_predictions.csv
+reports/entailment_metrics.json
+reports/figures/entailment_confusion_matrix.png
+```
+
+### 4. Confidence calibration
+
+After generating benchmark predictions:
+
+```bash
+python src/plot_confidence_calibration.py --input reports/benchmark_predictions.csv
+```
+
+Outputs:
+
+```text
+reports/confidence_calibration.csv
+reports/figures/confidence_calibration.png
+```
+
+### 5. Benchmark error analysis
+
+After generating benchmark predictions:
+
+```bash
+python src/error_analysis_benchmark.py --input reports/benchmark_predictions.csv
+```
+
+Outputs:
+
+```text
+reports/benchmark_error_analysis.csv
+```
+
+### 6. Original SciFact research pipeline
+
+```bash
+python src/load_data.py
+python src/preprocess.py
+python src/evaluate_retrieval.py
+python src/train_classifier.py
+python src/evaluate_classifier.py
+python src/evaluate_pipeline.py
+```
+
+---
+
+## Bundled evaluation files
+
+The repo includes two small development CSVs:
+
+```text
+data/raw/benchmark_claims.csv
+data/raw/entailment_pairs.csv
+```
+
+These are useful for smoke testing and development. For a formal research paper, run a larger public benchmark such as SciFact, FEVER, or AVeriTeC and report the exact setup.
 
 ---
 
 ## Installation
 
-Clone the repo:
-
 ```bash
 git clone <your-repo-url>
 cd claim-verification-ai
-```
-
-Create a virtual environment:
-
-```bash
 python -m venv .venv
 ```
-
-Activate it.
 
 Windows PowerShell:
 
@@ -189,7 +263,7 @@ pip install -r requirements.txt
 
 ---
 
-## Run the Streamlit app
+## Run the app
 
 ```bash
 streamlit run streamlit_app.py
@@ -204,19 +278,6 @@ Main file path: streamlit_app.py
 
 ---
 
-## Run the original SciFact research pipeline
-
-```bash
-python src/load_data.py
-python src/preprocess.py
-python src/evaluate_retrieval.py
-python src/train_classifier.py
-python src/evaluate_classifier.py
-python src/evaluate_pipeline.py
-```
-
----
-
 ## Run tests
 
 ```bash
@@ -225,72 +286,22 @@ pytest
 
 ---
 
-## Repository structure
+## Limitations
 
-```text
-claim-verification-ai/
-├── README.md
-├── requirements.txt
-├── streamlit_app.py
-├── app/
-├── data/
-├── notebooks/
-├── reports/
-│   ├── figures/
-│   │   └── system_architecture.png
-│   ├── paper_draft.md
-│   ├── one_page_summary.md
-│   ├── evaluation_results.md
-│   └── error_analysis.md
-├── src/
-│   ├── query_planner.py
-│   ├── web_retriever.py
-│   ├── source_ranker.py
-│   ├── evidence_summarizer.py
-│   ├── evidence_synthesizer.py
-│   ├── web_pipeline.py
-│   ├── report_builder.py
-│   ├── evaluate_realworld_benchmark.py
-│   └── ...
-└── tests/
-```
+- Live search results can change over time.
+- Source credibility scores are transparent heuristics, not proof that a source is correct.
+- Entailment predictions can still fail on complex wording or incomplete evidence.
+- Confidence is a system signal, not a calibrated probability unless calibration is evaluated.
+- The app should support human judgment, not replace expert review.
 
 ---
 
 ## Ethical considerations
 
-- This is not a guaranteed truth engine.
-- The system depends on retrieved public sources.
-- It can make incorrect predictions if evidence is missing, misleading, outdated, or ambiguous.
-- Confidence is a signal, not proof.
-- High-stakes domains such as medical, legal, financial, or political claims require expert review.
-- The tool is designed to support human judgment, not replace it.
-
----
-
-## Limitations
-
-- Live web search may miss important sources.
-- Search APIs and public endpoints can fail or change.
-- Some claims require specialized databases that are not included.
-- Very recent claims may not have reliable indexed evidence yet.
-- Rule-based synthesis is transparent and lightweight, but less powerful than a carefully evaluated LLM reasoning system.
-- Benchmark numbers must be generated by running the included scripts.
-
----
-
-## Future work
-
-- Evaluate on AVeriTeC, SciFact, FEVER, or LIAR.
-- Add optional local small-language-model reasoning for query planning and evidence synthesis.
-- Add stronger temporal filtering for current-event claims.
-- Add source date extraction and publication-date scoring.
-- Add a saved benchmark summary after real experiments are run.
-- Add a short short walkthrough GIF to the README.
-- Benchmark the entailment and contradiction layer against labeled claim-evidence pairs.
+This is a research prototype. It should not be used as a medical, legal, financial, or scientific authority. It can retrieve incomplete or misleading sources and can produce incorrect labels. The intended use is transparent, citation-first support for human review.
 
 ---
 
 ## College portfolio blurb
 
-Built a modular AI fact-checking system that verifies claims using live public evidence. The system plans search queries, retrieves and ranks sources, summarizes evidence, synthesizes findings, handles time-sensitive claims, and generates transparent citation-backed reports through a Streamlit app. The repository also includes a scientific claim verification research pipeline, evaluation scripts, notebooks, tests, and a research paper draft.
+Built a modular, web-grounded AI fact verification system that plans search queries, retrieves public evidence, ranks source credibility, summarizes findings, checks claim-evidence entailment, handles time-sensitive claims, and generates citation-backed reports. The project includes a deployed Streamlit interface and research evaluation scripts for benchmark metrics, ablation studies, statistical significance, entailment evaluation, calibration, and error analysis.

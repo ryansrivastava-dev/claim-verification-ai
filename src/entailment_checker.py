@@ -33,11 +33,13 @@ NLI_DISABLED = os.getenv("DISABLE_NLI_MODEL", "0").lower() in {"1", "true", "yes
 # cannot load the NLI model. This is intentionally broader than a one-off list
 # for any single example.
 _MUTUALLY_EXCLUSIVE_DESCRIPTOR_GROUPS: list[set[str]] = [
-    {"red", "reddish", "blue", "green", "yellow", "orange", "white", "black", "brown", "gray", "grey", "purple", "pink"},
+    {"red", "blue", "green", "yellow", "orange", "white", "black", "brown", "gray", "grey", "purple", "pink"},
     {"hot", "warm", "cold", "cool", "freezing"},
     {"increase", "increases", "increased", "rise", "rises", "rising", "decrease", "decreases", "decreased", "fall", "falls", "falling"},
     {"legal", "illegal", "lawful", "unlawful"},
     {"true", "false", "correct", "incorrect"},
+    {"country", "state", "province", "territory", "city", "capital"},
+    {"cheese", "rock", "rocky", "metal", "gas", "ice"},
 ]
 
 _ENTITY_DESCRIPTOR_PATTERNS = [
@@ -110,6 +112,7 @@ def _simple_relation(claim: str) -> tuple[str, str] | None:
     """
     text = re.sub(r"\s+", " ", str(claim).strip(" .!?"))
     patterns = [
+        r"^(.+?)\s+(?:is|are|was|were)\s+(?:commonly\s+|often\s+|widely\s+)?(?:called|known as|referred to as|nicknamed)\s+(?:a|an|the)?\s*(.+)$",
         r"^(.+?)\s+(?:is|are|was|were)\s+(?:a|an|the)?\s*(.+)$",
         r"^(.+?)\s+(?:has|have|had)\s+(.+)$",
     ]
@@ -131,12 +134,20 @@ def extract_simple_relation(claim: str) -> tuple[str, str] | None:
 
 def _normalize_descriptor_terms(text: str) -> set[str]:
     """Normalize a short descriptor phrase into comparable terms."""
-    return {
-        token
-        for token in re.findall(r"[a-z]+", str(text).lower())
-        if token not in {"the", "a", "an", "of", "to", "in", "on", "at", "and", "or", "planet", "body", "object"}
-        and len(token) > 1
+    aliases = {
+        "reddish": "red",
+        "bluish": "blue",
+        "grey": "gray",
+        "rocky": "rock",
     }
+    terms: set[str] = set()
+    for token in re.findall(r"[a-z]+", str(text).lower()):
+        if token in {"the", "a", "an", "of", "to", "in", "on", "at", "and", "or", "planet", "body", "object"}:
+            continue
+        if len(token) <= 1:
+            continue
+        terms.add(aliases.get(token, token))
+    return terms
 
 
 def _find_contrast_group(term: str) -> set[str] | None:
@@ -200,6 +211,31 @@ def _fallback_descriptor_contradiction(subject: str, predicate: str, evidence_lo
     return None
 
 
+
+def _capital_relation_entails(claim_lower: str, evidence_lower: str) -> bool:
+    """Detect swapped capital relation: 'capital of X is Y' vs 'Y is the capital of X'."""
+    match = re.search(r"capital of ([a-z .'-]+?) is ([a-z .'-]+)$", claim_lower.strip(" .!?"))
+    if not match:
+        return False
+    place = match.group(1).strip()
+    capital = match.group(2).strip()
+    return capital in evidence_lower and "capital" in evidence_lower and place in evidence_lower
+
+
+def _coverage_entails_non_copular(claim: str, evidence: str, coverage: float) -> EntailmentResult | None:
+    """Conservative high-coverage support for claims that are not simple X-is-Y relations."""
+    relation = _simple_relation(claim)
+    if relation is not None:
+        return None
+    if coverage >= 0.60 and _has_negation(claim) == _has_negation(evidence):
+        return EntailmentResult(
+            "entailment",
+            min(0.70, 0.52 + 0.20 * coverage),
+            "Most key claim terms appear in the evidence with no obvious contradiction.",
+            "conservative-fallback-high-coverage",
+        )
+    return None
+
 def _has_negation(text: str) -> bool:
     return bool(
         re.search(
@@ -223,6 +259,18 @@ def _fallback_entailment(claim: str, evidence: str) -> EntailmentResult:
     # Direct statement match is the only high-confidence support in the fallback.
     if claim_lower and claim_lower in evidence_lower:
         return EntailmentResult("entailment", 0.86, "The evidence directly contains the claim wording.", "conservative-fallback")
+
+    if _capital_relation_entails(claim_lower, evidence_lower):
+        return EntailmentResult(
+            "entailment",
+            0.70,
+            "The evidence states the same capital relationship in reversed wording.",
+            "conservative-fallback-relation",
+        )
+
+    high_coverage_support = _coverage_entails_non_copular(claim_clean, evidence_clean, coverage)
+    if high_coverage_support is not None:
+        return high_coverage_support
 
     if coverage < 0.45:
         return EntailmentResult("neutral", 0.56, "The evidence does not cover enough key claim terms.", "conservative-fallback")

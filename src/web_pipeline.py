@@ -394,19 +394,32 @@ def _retrieve_with_plan(
     top_k: int,
     alpha: float,
     max_pages: int,
+    trust_weight: float = 0.15,
 ) -> list[dict[str, Any]]:
     """Run retrieval across a small set of planned queries and merge the results."""
     all_evidence: list[dict[str, Any]] = []
     queries = search_plan.generated_queries or [search_plan.primary_query]
     # Use the first two queries by default to improve quality without making the app too slow.
     for query in queries[:2]:
-        retrieved = retriever.retrieve(
-            claim=query,
-            method=method,
-            top_k=top_k,
-            alpha=alpha,
-            max_pages=max_pages,
-        )
+        try:
+            retrieved = retriever.retrieve(
+                claim=query,
+                method=method,
+                top_k=top_k,
+                alpha=alpha,
+                max_pages=max_pages,
+                trust_weight=trust_weight,
+            )
+        except TypeError as exc:
+            if "trust_weight" not in str(exc):
+                raise
+            retrieved = retriever.retrieve(
+                claim=query,
+                method=method,
+                top_k=top_k,
+                alpha=alpha,
+                max_pages=max_pages,
+            )
         for item in retrieved:
             enriched = dict(item)
             enriched["planned_query"] = query
@@ -420,6 +433,7 @@ def run_web_fact_check(
     top_k: int = 5,
     alpha: float = 0.5,
     max_pages: int = 6,
+    trust_weight: float = 0.15,
     use_web: bool = True,
     use_wikipedia: bool = True,
     use_openalex: bool = True,
@@ -447,6 +461,7 @@ def run_web_fact_check(
         top_k=top_k,
         alpha=alpha,
         max_pages=max_pages,
+        trust_weight=trust_weight,
     )
     evidence = add_entailment_scores(claim, evidence, max_items=min(5, top_k))
 
@@ -470,13 +485,25 @@ def run_web_fact_check(
     # One targeted re-retrieval pass when the first evidence set is weak. This mirrors
     # human fact-checking without creating an expensive or infinite search loop.
     if synthesis.needs_more_search and synthesis.rereview_query and retriever is not None:
-        second_pass = retriever.retrieve(
-            claim=synthesis.rereview_query,
-            method=method,
-            top_k=top_k,
-            alpha=alpha,
-            max_pages=max(2, max_pages // 2),
-        )
+        try:
+            second_pass = retriever.retrieve(
+                claim=synthesis.rereview_query,
+                method=method,
+                top_k=top_k,
+                alpha=alpha,
+                max_pages=max(2, max_pages // 2),
+                trust_weight=trust_weight,
+            )
+        except TypeError as exc:
+            if "trust_weight" not in str(exc):
+                raise
+            second_pass = retriever.retrieve(
+                claim=synthesis.rereview_query,
+                method=method,
+                top_k=top_k,
+                alpha=alpha,
+                max_pages=max(2, max_pages // 2),
+            )
         if second_pass:
             evidence = _dedupe_evidence(evidence + second_pass)[:top_k]
             evidence = add_entailment_scores(claim, evidence, max_items=min(5, top_k))
@@ -519,6 +546,7 @@ def run_web_fact_check(
         "claim_profile": profile_dict,
         "search_plan": search_plan.to_dict(),
         "retrieval_method": method,
+        "trust_weight": trust_weight,
         "top_evidence": summarized_evidence,
         "synthesis": synthesis.to_dict(),
         "workflow_steps": [

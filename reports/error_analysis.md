@@ -1,35 +1,27 @@
-# Error Analysis Log
+# Error Analysis Plan
 
-This file is for recording real errors after running the benchmark or manually testing the app. Do not fill this with invented results.
+Error analysis should be filled after running the benchmark and ablation scripts. The goal is to explain why the system fails, not just list incorrect predictions.
 
-## Error categories
+## Failure categories
 
-- **Outdated source:** The system relied on a past source for a current claim.
-- **Weak evidence:** Retrieved sources were related but did not directly verify the claim.
-- **Ambiguous wording:** The claim could be interpreted in multiple ways.
-- **Entity confusion:** Sources discussed a similarly named person, place, organization, or event.
-- **Source quality issue:** A low-quality or irrelevant source was ranked too highly.
-- **Insufficient evidence:** The public sources available were not enough to verify the claim.
-- **Label boundary issue:** The answer fell between Supported, Refuted, Conflicting Evidence, or Not Enough Evidence.
+| Category | Meaning | Possible fix |
+|---|---|---|
+| Retrieval failure | The correct evidence was not retrieved. | Better query planning, more sources, dense retrieval. |
+| Source credibility failure | A weak source was ranked too highly. | Adjust credibility weighting, block low-quality domains. |
+| Entailment failure | Evidence was related but did not truly support/refute the claim. | Improve NLI model or fallback rules. |
+| Ambiguous claim | The claim was vague or depended on interpretation. | Add claim clarification or subclaim decomposition. |
+| Current-context failure | Old evidence was mistaken for current evidence. | Improve current-source handling and official-source preference. |
+| Insufficient evidence | Public sources did not contain enough information. | Return Not Enough Evidence with clearer explanation. |
+| Label mapping issue | Dataset labels do not map cleanly to app labels. | Normalize labels carefully and document mapping. |
 
 ## Manual review table
 
-| Claim | True label | Predicted label | What went wrong | Fix or next step |
-|---|---|---|---|---|
-| Joe Biden is the current president | Refuted | Previously likely supported | Old biography evidence matched Biden + president but did not prove current office | Added current-context handling for time-sensitive claims |
+After running `src/evaluate_realworld_benchmark.py`, copy representative errors here.
 
-## How to generate more examples
+| Claim | True label | Predicted label | Top source | Error type | What happened | Fix idea |
+|---|---|---|---|---|---|---|
+| TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 
-Run:
+## Research use
 
-```bash
-python src/evaluate_realworld_benchmark.py --input data/raw/benchmark_claims.csv --limit 50
-```
-
-Then review:
-
-```text
-reports/benchmark_predictions.csv
-reports/benchmark_metrics.json
-reports/figures/confusion_matrix.png
-```
+For a paper, include 3–5 specific errors and explain whether they were caused by retrieval, source ranking, entailment, ambiguity, or label mismatch.

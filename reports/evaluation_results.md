@@ -1,37 +1,39 @@
 # Evaluation Results
 
-This project is set up to report real benchmark results only after the evaluation scripts are run.
+This file is intentionally result-aware, not result-inventing. Fill it after running the evaluation scripts.
 
-## How to run a benchmark
-
-Prepare a CSV file at `data/raw/benchmark_claims.csv` with this format:
-
-```csv
-claim,label
-"The capital of France is Paris.",Supported
-"The Eiffel Tower is located in Berlin.",Refuted
-```
-
-Then run:
+## Commands
 
 ```bash
-python src/evaluate_realworld_benchmark.py --input data/raw/benchmark_claims.csv --limit 50
+python src/evaluate_realworld_benchmark.py --input data/raw/benchmark_claims.csv --limit 20
+python src/evaluate_ablation_study.py --input data/raw/benchmark_claims.csv --limit 20
+python src/evaluate_entailment_layer.py --input data/raw/entailment_pairs.csv
+python src/plot_confidence_calibration.py --input reports/benchmark_predictions.csv
+python src/error_analysis_benchmark.py --input reports/benchmark_predictions.csv
 ```
 
-The script saves:
 
-- `reports/benchmark_predictions.csv`
-- `reports/benchmark_metrics.json`
-- `reports/evaluation_summary.csv`
-- `reports/figures/confusion_matrix.png`
+## Included development sanity-check result
 
-## Metrics reported
+The repository includes a small manually labeled entailment development file at `data/raw/entailment_pairs.csv`. Running the deterministic fallback entailment evaluator on this file produced the saved files `reports/entailment_metrics.json`, `reports/entailment_predictions.csv`, and `reports/figures/entailment_confusion_matrix.png`. These are development sanity-check results, not a formal public benchmark.
 
-- Accuracy
-- Macro F1
-- Per-class precision, recall, and F1
-- Confusion matrix
+## Results to report
 
-## Honesty rule
+| Experiment | Output file | Metrics |
+|---|---|---|
+| Verdict benchmark | `reports/benchmark_metrics.json`, `reports/classification_report.csv` | Accuracy, macro F1, per-class F1 |
+| Ablation study | `reports/ablation_results.csv` | Accuracy, macro F1 by config |
+| Significance tests | `reports/significance_tests.csv` | Exact McNemar p-values |
+| Entailment evaluation | `reports/entailment_metrics.json` | Macro precision, recall, F1 |
+| Calibration | `reports/confidence_calibration.csv` | Predicted vs actual accuracy by bin |
 
-Do not write benchmark numbers in the README or paper unless they come from the saved output files above.
+## Interpretation guide
+
+- If hybrid retrieval beats BM25 and TF-IDF on the same benchmark, it supports the main hypothesis.
+- If source credibility weighting improves macro F1 or reduces high-confidence mistakes, it supports the credibility-ranking contribution.
+- If the entailment layer improves contradiction detection and reduces false support, it should be framed as a major system contribution.
+- If confidence calibration is poor, the paper should say that confidence is a ranking signal, not a reliable probability.
+
+## Do not report
+
+Do not report state-of-the-art claims, public accuracy claims, or benchmark comparisons unless those experiments were actually run under matching conditions.

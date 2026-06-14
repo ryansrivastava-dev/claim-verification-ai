@@ -125,6 +125,13 @@ def evaluate(input_path: Path, limit: int | None = None, output_dir: Path = Path
     metrics_path = output_dir / "benchmark_metrics.json"
     metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
 
+    report_rows = []
+    for label_name, values in metrics["classification_report"].items():
+        if isinstance(values, dict):
+            report_rows.append({"label": label_name, **values})
+    if report_rows:
+        pd.DataFrame(report_rows).to_csv(output_dir / "classification_report.csv", index=False)
+
     evaluation_summary = pd.DataFrame(
         [
             {
