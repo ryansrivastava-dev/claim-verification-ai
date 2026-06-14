@@ -98,3 +98,44 @@ def test_search_plan_rewrites_current_role_claim():
     plan = plan_search_queries("Joe Biden is the current president", profile=profile)
     assert "current president" in plan.primary_query.lower()
     assert "official" in plan.primary_query.lower()
+
+
+def test_source_quality_labels_official_source():
+    from src.source_ranker import source_category, source_trust_score, trust_label
+
+    category = source_category("https://www.whitehouse.gov/administration/", "White House")
+    score = source_trust_score("https://www.whitehouse.gov/administration/", "White House")
+    assert category == "Official / government / institutional"
+    assert score >= 0.90
+    assert "trust" in trust_label(score).lower()
+
+
+def test_report_builder_can_make_citation_list_and_pdf_bytes():
+    from src.report_builder import build_citation_list, build_pdf_report_bytes
+
+    result = {
+        "claim": "The capital of France is Paris.",
+        "predicted_label": "Likely Supported",
+        "confidence": 0.87,
+        "explanation": "Evidence matches the claim.",
+        "claim_profile": {"category": "general knowledge", "needs_current_source": False},
+        "search_plan": {"primary_query": "capital of France", "generated_queries": []},
+        "synthesis": {"evidence_strength": "Strong", "analysis": "Evidence supports the claim."},
+        "top_evidence": [
+            {
+                "title": "Paris",
+                "url": "https://en.wikipedia.org/wiki/Paris",
+                "source": "Wikipedia",
+                "summary": "Paris is the capital of France.",
+                "score": 0.85,
+                "trust_score": 0.82,
+                "source_category": "Reference",
+                "trust_label": "Strong trust signal",
+                "evidence_strength_label": "Strong evidence candidate",
+            }
+        ],
+    }
+    citations = build_citation_list(result)
+    assert "https://en.wikipedia.org/wiki/Paris" in citations
+    pdf_bytes = build_pdf_report_bytes(result)
+    assert pdf_bytes.startswith(b"%PDF")

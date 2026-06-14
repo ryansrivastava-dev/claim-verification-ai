@@ -53,10 +53,10 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 try:
     from evidence_extractor import clean_text, passages_from_documents
-    from source_ranker import blend_relevance_and_trust, source_trust_score
+    from source_ranker import blend_relevance_and_trust, source_quality_report, source_trust_score
 except ImportError:  # pragma: no cover
     from src.evidence_extractor import clean_text, passages_from_documents
-    from src.source_ranker import blend_relevance_and_trust, source_trust_score
+    from src.source_ranker import blend_relevance_and_trust, source_quality_report, source_trust_score
 
 
 WIKIPEDIA_API_URL = "https://en.wikipedia.org/w/api.php"
@@ -382,6 +382,12 @@ class MultiSourceEvidenceRetriever:
         results: list[dict[str, Any]] = []
         for idx in top_indices:
             row = passage_df.iloc[int(idx)]
+            quality = source_quality_report(
+                url=str(row["url"]),
+                source_name=str(row["source"]),
+                relevance=float(relevance_scores[idx]),
+                final_score=float(final_scores[idx]),
+            )
             results.append(
                 {
                     "passage_id": str(row["passage_id"]),
@@ -394,7 +400,10 @@ class MultiSourceEvidenceRetriever:
                     "relevance_score": float(relevance_scores[idx]),
                     "tfidf_score": float(tfidf_norm[idx]),
                     "bm25_score": float(bm25_norm[idx]),
-                    "trust_score": float(trust_scores[idx]),
+                    "trust_score": float(quality["trust_score"]),
+                    "source_category": str(quality["source_category"]),
+                    "trust_label": str(quality["trust_label"]),
+                    "evidence_strength_label": str(quality["evidence_strength_label"]),
                 }
             )
         return results

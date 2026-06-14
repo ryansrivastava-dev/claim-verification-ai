@@ -8,8 +8,10 @@ import pandas as pd
 import streamlit as st
 
 try:
+    from report_builder import build_citation_list, build_pdf_report_bytes
     from web_pipeline import run_web_fact_check
 except ImportError:  # pragma: no cover
+    from src.report_builder import build_citation_list, build_pdf_report_bytes
     from src.web_pipeline import run_web_fact_check
 
 
@@ -20,8 +22,8 @@ def _display_workflow(result: dict) -> None:
         return
 
     st.subheader("Verification workflow")
-    cols = st.columns(len(steps))
-    for col, step in zip(cols, steps):
+    cols = st.columns(min(len(steps), 6))
+    for col, step in zip(cols, steps[:6]):
         col.metric(step.get("step", "Step"), "Done")
         col.caption(step.get("detail", ""))
 
@@ -44,6 +46,22 @@ def _display_search_plan(result: dict) -> None:
             st.write(f"- {note}")
 
 
+def _display_freshness_guardrail(result: dict) -> None:
+    profile = result.get("claim_profile", {})
+    active = bool(profile.get("needs_current_source"))
+    st.markdown("### Freshness guardrail")
+    if active:
+        st.success("Freshness check: enabled")
+        st.write(
+            "The claim contains time-sensitive wording. The system gives extra weight to current, official, "
+            "or role-specific sources and avoids treating old biography matches as proof of current facts."
+        )
+        if profile.get("current_role_claim"):
+            st.json(profile["current_role_claim"])
+    else:
+        st.write("Freshness check: not triggered for this claim.")
+
+
 def _display_evidence(evidence: list[dict]) -> None:
     """Render retrieved evidence in clean cards."""
     if not evidence:
@@ -55,15 +73,20 @@ def _display_evidence(evidence: list[dict]) -> None:
             title = item.get("title", "Untitled source")
             url = item.get("url", "")
             source = item.get("source", "Source")
+            category = item.get("source_category", "Unknown source type")
+            trust_label = item.get("trust_label", "Unknown trust signal")
+            strength_label = item.get("evidence_strength_label", "Evidence candidate")
             relevance_label = item.get("evidence_relevance_label", "Retrieved evidence")
+
             st.markdown(f"### Evidence {index}")
             if url:
                 st.markdown(f"**Source:** [{title}]({url})")
-                st.caption(f"{source} • {relevance_label}")
+                st.caption(f"{source} • {category} • {trust_label} • {relevance_label}")
             else:
                 st.markdown(f"**Source:** {title}")
-                st.caption(f"{source} • {relevance_label}")
+                st.caption(f"{source} • {category} • {trust_label} • {relevance_label}")
 
+            st.write(f"**Evidence quality:** {strength_label}")
             summary = item.get("summary")
             if summary:
                 st.write("**Evidence summary:**", summary)
@@ -80,20 +103,110 @@ def _display_evidence(evidence: list[dict]) -> None:
             score_cols[4].metric("TF-IDF", f"{item.get('tfidf_score', 0.0):.3f}")
 
 
-def main(project_root: Path | None = None) -> None:
-    """Run the Streamlit app."""
-    st.set_page_config(
-        page_title="Evidence-Based Fact Verification",
-        page_icon="🔎",
-        layout="wide",
+def _display_report_tab(result: dict) -> None:
+    report = result.get("fact_check_report", "")
+    st.markdown("### Downloadable report")
+    col1, col2 = st.columns(2)
+    col1.download_button(
+        label="Download Markdown report",
+        data=report,
+        file_name="fact_check_report.md",
+        mime="text/markdown",
     )
+    try:
+        pdf_bytes = build_pdf_report_bytes(result)
+        col2.download_button(
+            label="Download PDF report",
+            data=pdf_bytes,
+            file_name="fact_check_report.pdf",
+            mime="application/pdf",
+        )
+    except Exception as exc:  # pragma: no cover - optional dependency/runtime edge case
+        col2.caption(f"PDF export unavailable: {type(exc).__name__}")
 
-    st.title("Evidence-Based Fact Verification")
+    st.markdown("### Copyable citations")
+    st.code(build_citation_list(result), language="markdown")
+    st.markdown(report)
+
+
+def _display_evaluation_tab(project_root: Path) -> None:
+    st.header("Evaluation Results")
     st.write(
-        "Enter a claim. The system plans search queries, retrieves public evidence, summarizes sources, "
-        "synthesizes the evidence, and returns a citation-backed evidence label."
+        "This tab is designed for real benchmark outputs. It does not invent accuracy, F1, or leaderboard numbers. "
+        "After running the benchmark scripts, result files will appear here."
     )
 
+    leaderboard_path = project_root / "reports" / "evaluation_leaderboard.csv"
+    metrics_path = project_root / "reports" / "benchmark_metrics.json"
+    confusion_path = project_root / "reports" / "figures" / "confusion_matrix.png"
+
+    if leaderboard_path.exists():
+        st.subheader("Leaderboard")
+        st.dataframe(pd.read_csv(leaderboard_path), use_container_width=True)
+    else:
+        st.subheader("Leaderboard template")
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {"System": "Keyword baseline", "Evidence source": "Web/Wikipedia/OpenAlex", "Model": "Rule-based", "Accuracy": "Run benchmark", "Macro F1": "Run benchmark"},
+                    {"System": "Hybrid retrieval", "Evidence source": "Web/Wikipedia/OpenAlex", "Model": "Rule-based", "Accuracy": "Run benchmark", "Macro F1": "Run benchmark"},
+                    {"System": "Modular pipeline", "Evidence source": "Planned live retrieval", "Model": "Evidence synthesis baseline", "Accuracy": "Run benchmark", "Macro F1": "Run benchmark"},
+                ]
+            ),
+            use_container_width=True,
+        )
+
+    if metrics_path.exists():
+        st.subheader("Benchmark metrics")
+        st.json(metrics_path.read_text(encoding="utf-8"))
+    else:
+        st.info("No benchmark metrics file found yet. Run `python src/evaluate_realworld_benchmark.py --help` for options.")
+
+    if confusion_path.exists():
+        st.subheader("Confusion matrix")
+        st.image(str(confusion_path), use_container_width=True)
+
+    st.subheader("How to generate real results")
+    st.code(
+        "python src/evaluate_realworld_benchmark.py --input data/raw/benchmark_claims.csv --limit 50\n"
+        "python src/error_analysis.py",
+        language="bash",
+    )
+    st.caption("The benchmark script expects a CSV with columns: claim,label. It saves metrics to reports/ without fabricating results.")
+
+
+def _display_architecture_tab(project_root: Path) -> None:
+    st.header("Project Architecture")
+    diagram_path = project_root / "reports" / "figures" / "system_architecture.png"
+    if diagram_path.exists():
+        st.image(str(diagram_path), use_container_width=True)
+    else:
+        st.code(
+            "Claim → Query Planning → Live Evidence Retrieval → Source Ranking → Evidence Summarization → "
+            "Evidence Synthesis → Freshness Guardrail → Verdict + Citations + Report"
+        )
+
+    st.subheader("What makes the system different")
+    st.write(
+        "The app is built as a modular fact-checking workflow rather than a single keyword search. "
+        "It plans queries, retrieves public evidence, ranks source quality, summarizes evidence, synthesizes findings, "
+        "performs a current-fact guardrail, and exports a transparent report."
+    )
+
+    st.subheader("Source quality signals")
+    st.write(
+        "Evidence cards include source type, trust signal, relevance score, and overall evidence score. "
+        "These signals help users inspect why a source was ranked highly."
+    )
+
+    st.subheader("Limitations")
+    st.write(
+        "The system can still be wrong if search results are incomplete, sources are misleading, or the claim requires private, "
+        "hyper-local, or very recent information. The output should support human review, not replace it."
+    )
+
+
+def _live_fact_check_tab() -> None:
     with st.sidebar:
         st.header("Retrieval settings")
         method = st.selectbox("Ranking method", ["Hybrid", "BM25", "TF-IDF"])
@@ -158,16 +271,17 @@ def main(project_root: Path | None = None) -> None:
             return
 
         st.subheader("Result")
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         col1.metric("Evidence label", result["predicted_label"])
         col2.metric("Confidence signal", f"{result['confidence']:.2f}")
         col3.metric("Claim type", result["claim_profile"]["category"])
         col4.metric("Evidence strength", result.get("synthesis", {}).get("evidence_strength", "Unknown"))
+        col5.metric("Freshness check", "On" if result["claim_profile"].get("needs_current_source") else "Off")
 
         st.write("**Explanation:**", result["explanation"])
         st.caption(result["claim_profile"]["reason"])
 
-        tabs = st.tabs(["Workflow", "Evidence", "Synthesis", "Report", "Technical details"])
+        tabs = st.tabs(["Workflow", "Evidence", "Synthesis", "Freshness", "Report", "Technical details"])
 
         with tabs[0]:
             _display_workflow(result)
@@ -188,21 +302,19 @@ def main(project_root: Path | None = None) -> None:
                 st.write("**Re-retrieval query considered:**", synthesis["rereview_query"])
 
         with tabs[3]:
-            report = result.get("fact_check_report", "")
-            st.download_button(
-                label="Download fact-check report",
-                data=report,
-                file_name="fact_check_report.md",
-                mime="text/markdown",
-            )
-            st.markdown(report)
+            _display_freshness_guardrail(result)
 
         with tabs[4]:
+            _display_report_tab(result)
+
+        with tabs[5]:
             detail_rows = [
                 {
                     "passage_id": item.get("passage_id"),
                     "title": item.get("title"),
                     "source": item.get("source"),
+                    "source_category": item.get("source_category"),
+                    "trust_label": item.get("trust_label"),
                     "score": item.get("score"),
                     "trust_score": item.get("trust_score"),
                     "planned_query": item.get("planned_query"),
@@ -219,6 +331,30 @@ def main(project_root: Path | None = None) -> None:
                     "claim_profile": result.get("claim_profile"),
                 }
             )
+
+
+def main(project_root: Path | None = None) -> None:
+    """Run the Streamlit app."""
+    project_root = project_root or Path(__file__).resolve().parents[1]
+    st.set_page_config(
+        page_title="Evidence-Based Fact Verification",
+        page_icon="🔎",
+        layout="wide",
+    )
+
+    st.title("Evidence-Based Fact Verification")
+    st.write(
+        "A modular fact-checking system that plans search queries, retrieves public evidence, ranks source quality, "
+        "summarizes findings, handles time-sensitive claims, and generates citation-backed reports."
+    )
+
+    app_tabs = st.tabs(["Live Fact Check", "Evaluation Results", "Project Architecture"])
+    with app_tabs[0]:
+        _live_fact_check_tab()
+    with app_tabs[1]:
+        _display_evaluation_tab(project_root)
+    with app_tabs[2]:
+        _display_architecture_tab(project_root)
 
     st.divider()
     st.caption(

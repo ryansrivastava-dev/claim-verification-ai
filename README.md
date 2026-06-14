@@ -1,8 +1,78 @@
 # Evidence-Based Fact Verification AI
 
-A GitHub-ready Python project for building an evidence-grounded claim verification system. The app takes a claim, retrieves public evidence at runtime, ranks source passages, and returns an evidence label with citations.
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![Streamlit](https://img.shields.io/badge/Streamlit-App-red)
+![Tests](https://img.shields.io/badge/tests-passing-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Status](https://img.shields.io/badge/status-research%20prototype-orange)
 
-The original research question focuses on **Hybrid Retrieval for Scientific Claim Verification**. The deployed version expands the project into a broader web-grounded verification system by using live public sources instead of a local sample corpus.
+A modular AI fact-checking system that verifies claims using live public evidence, source ranking, evidence summarization, evidence synthesis, time-sensitive claim handling, and transparent citation-backed reports.
+
+The project began as **Hybrid Retrieval for Scientific Claim Verification** and expanded into a broader web-grounded verification system. It still includes the SciFact research pipeline, but the deployed Streamlit app checks public claims using live evidence retrieval instead of a toy demo corpus.
+
+---
+
+## Why this project is special
+
+Most simple fact-checking apps do one search and return a label. This project uses a modular workflow that is closer to real automated fact-checking research:
+
+```text
+Claim
+→ Claim type detection
+→ Query planning
+→ Live public evidence retrieval
+→ Source credibility scoring
+→ Evidence summarization
+→ Evidence synthesis
+→ Freshness guardrail for current facts
+→ Evidence-backed verdict
+→ Downloadable citation report
+```
+
+The goal is not to be a perfect truth engine. The goal is to make verification transparent: the app shows what it searched, what it found, how sources were ranked, and why it produced a label.
+
+---
+
+## Live app features
+
+- User enters any public factual claim.
+- System detects the claim category, including time-sensitive claims.
+- Query planner creates targeted search queries instead of only searching the raw claim.
+- Evidence is retrieved from public sources at runtime.
+- Sources are ranked with TF-IDF, BM25, or hybrid keyword retrieval.
+- Sources receive credibility signals such as official, scholarly, reference, news, or general web.
+- Evidence passages are summarized using an extractive summarizer.
+- Evidence synthesis explains the overall finding.
+- A freshness guardrail prevents old biography pages from being treated as proof of current facts.
+- App returns labels such as:
+  - `Likely Supported`
+  - `Likely Refuted`
+  - `Not Enough Evidence`
+- Users can download a Markdown or PDF fact-check report.
+- The Streamlit app includes three sections:
+  - Live Fact Check
+  - Evaluation Results
+  - Project Architecture
+
+---
+
+## System architecture
+
+![System architecture](reports/figures/system_architecture.png)
+
+---
+
+## Evidence sources
+
+The deployed app retrieves evidence live from public sources:
+
+- **General web search** using DuckDuckGo-compatible search packages when available.
+- **Wikipedia** through the public MediaWiki API.
+- **OpenAlex** for scholarly/scientific works.
+
+The system can check many public, documented claims. It cannot guarantee verification of private, undocumented, hyper-local, very recent, or disputed claims.
+
+---
 
 ## Research question
 
@@ -12,118 +82,70 @@ How do sparse retrieval, dense retrieval, and hybrid retrieval affect the accura
 
 A hybrid retrieval system combining keyword-based retrieval with sentence-embedding retrieval will retrieve better evidence and improve end-to-end claim verification performance compared with either retrieval method alone.
 
-## What the project does
-
-- Accepts a user-entered claim.
-- Plans targeted search queries before retrieval.
-- Searches public evidence sources at runtime.
-- Extracts readable evidence passages from retrieved sources.
-- Ranks passages using TF-IDF, BM25, or hybrid retrieval.
-- Summarizes evidence passages and synthesizes the strongest evidence.
-- Performs one conservative re-retrieval pass when evidence is weak.
-- Returns a source-grounded evidence label:
-  - `Likely Supported`
-  - `Possibly Refuted`
-  - `Not Enough Evidence`
-- Shows source titles, URLs, evidence summaries, retrieval scores, source trust signals, and a downloadable fact-check report.
-- Includes a SciFact research pipeline for dataset loading, preprocessing, retrieval experiments, classification experiments, end-to-end evaluation, error analysis, notebooks, reports, and tests.
-
-
-## Live app workflow
-
-The hosted app now follows a modular verification workflow inspired by modern retrieval-based fact-checking systems:
-
-```text
-Claim analysis
-→ Query planning
-→ Public evidence retrieval
-→ Evidence summarization
-→ Evidence synthesis
-→ Re-retrieval if evidence is weak
-→ Verdict evaluation
-→ Downloadable report
-```
-
-This is still not a guarantee of truth. It is a citation-first system that explains what it found and why it assigned a label. Time-sensitive claims trigger a freshness guardrail so old biography pages are not treated as proof of current facts.
-
-## Live app evidence sources
-
-The Streamlit app does not rely on a fake sample dataset or a local sample-data fallback. It retrieves evidence live from public sources.
-
-Included no-key sources:
-
-- **General web search** through DuckDuckGo Search when the package is available.
-- **Wikipedia** through the public MediaWiki API.
-- **OpenAlex** for scholarly/scientific works.
-
-The system can check many public, well-documented claims, but it cannot guarantee verification of every possible fact. Some facts are private, undocumented, very recent, ambiguous, or disputed. In those cases, the correct output is usually `Not Enough Evidence`.
-
-## What it can check well
-
-Examples that usually work better:
-
-```text
-The capital of France is Paris.
-High blood pressure increases risk of stroke.
-Antibiotics are used to treat bacterial infections.
-NASA launched the James Webb Space Telescope in 2021.
-The Eiffel Tower is located in Paris.
-```
-
-Examples that may require more specialized or current sources:
-
-```text
-A private person attended school yesterday.
-A team won a game five minutes ago.
-A local restaurant changed its hours today.
-A disputed opinion is objectively true.
-```
+---
 
 ## Methods compared
 
 ### Sparse retrieval
-
-Sparse retrieval uses keyword overlap between a claim and evidence passages.
 
 - **TF-IDF:** Converts claims and evidence passages into weighted keyword vectors.
 - **BM25:** A strong keyword-search baseline commonly used in information retrieval.
 
 ### Dense retrieval
 
-Dense retrieval uses a lightweight Sentence-Transformers model such as `all-MiniLM-L6-v2` to encode claims and evidence passages into semantic vectors. The single `requirements.txt` file includes both the Streamlit app dependencies and the full research dependencies.
+- Uses Sentence-Transformers such as `all-MiniLM-L6-v2` for semantic evidence search in the full research pipeline.
 
 ### Hybrid retrieval
 
-Hybrid retrieval combines keyword retrieval signals:
+The live app combines BM25 and TF-IDF:
 
 ```text
 hybrid_score = alpha * bm25_score + (1 - alpha) * tfidf_score
 ```
 
-In the SciFact research pipeline, the project also includes dense retrieval and hybrid dense/sparse comparison code.
+The research pipeline also includes dense retrieval code for scientific claim verification experiments.
 
-## Evaluation metrics
+---
 
-Retrieval metrics:
+## Evaluation
 
-- Recall@1, Recall@3, Recall@5, Recall@10
-- Precision@k
-- Mean Reciprocal Rank (MRR)
+This repository does **not** fabricate results. Metrics should only be added after running evaluation scripts.
 
-Classification metrics:
+Metrics supported:
 
 - Accuracy
 - Macro F1
 - Per-class F1
 - Confusion matrix
-
-End-to-end metrics:
-
-- Accuracy
-- Macro F1
 - Evidence retrieval quality when gold evidence is available
+- Recall@k and MRR for retrieval experiments
 
-The repository does not fabricate results. Metrics are produced only by running the experiment scripts.
+Run live benchmark evaluation with a labeled CSV:
+
+```bash
+python src/evaluate_realworld_benchmark.py --input data/raw/benchmark_claims.csv --limit 50
+```
+
+Expected CSV format:
+
+```csv
+claim,label
+"The capital of France is Paris.",Supported
+"The Eiffel Tower is located in Berlin.",Refuted
+```
+
+Outputs:
+
+```text
+reports/benchmark_predictions.csv
+reports/benchmark_metrics.json
+reports/evaluation_leaderboard.csv
+reports/figures/confusion_matrix.png
+```
+
+The Streamlit app automatically displays these files in the **Evaluation Results** tab when they exist.
+
+---
 
 ## Installation
 
@@ -134,11 +156,13 @@ git clone <your-repo-url>
 cd claim-verification-ai
 ```
 
-Create and activate a virtual environment:
+Create a virtual environment:
 
 ```bash
 python -m venv .venv
 ```
+
+Activate it.
 
 Windows PowerShell:
 
@@ -152,22 +176,18 @@ macOS/Linux:
 source .venv/bin/activate
 ```
 
-Install the full project dependencies:
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
+---
+
 ## Run the Streamlit app
 
 ```bash
 streamlit run streamlit_app.py
-```
-
-Alternative local app path:
-
-```bash
-streamlit run app/streamlit_app.py
 ```
 
 For Streamlit Community Cloud:
@@ -177,61 +197,28 @@ Branch: main
 Main file path: streamlit_app.py
 ```
 
-## Run the web-grounded pipeline from Python
+---
 
-```python
-from src.web_pipeline import run_web_fact_check
-
-result = run_web_fact_check("The capital of France is Paris.")
-print(result["predicted_label"])
-for evidence in result["top_evidence"]:
-    print(evidence["title"], evidence["url"])
-```
-
-## Run the SciFact research pipeline
-
-Load and preprocess SciFact:
+## Run the original SciFact research pipeline
 
 ```bash
 python src/load_data.py
 python src/preprocess.py
-```
-
-Evaluate retrieval:
-
-```bash
 python src/evaluate_retrieval.py
-```
-
-Train classifiers:
-
-```bash
 python src/train_classifier.py
-```
-
-Evaluate classifiers:
-
-```bash
 python src/evaluate_classifier.py
-```
-
-Evaluate end-to-end systems:
-
-```bash
 python src/evaluate_pipeline.py
 ```
 
-Run the scientific command-line pipeline:
+---
 
-```bash
-python src/pipeline.py --claim "High blood pressure increases risk of stroke." --retriever hybrid --top_k 5
-```
-
-Run tests:
+## Run tests
 
 ```bash
 pytest
 ```
+
+---
 
 ## Repository structure
 
@@ -241,80 +228,64 @@ claim-verification-ai/
 ├── requirements.txt
 ├── streamlit_app.py
 ├── app/
-│   └── streamlit_app.py
-├── src/
-│   ├── web_retriever.py
-│   ├── web_pipeline.py
-│   ├── streamlit_app_core.py
-│   ├── load_data.py
-│   ├── preprocess.py
-│   ├── retrieve_tfidf.py
-│   ├── retrieve_bm25.py
-│   ├── retrieve_dense.py
-│   ├── retrieve_hybrid.py
-│   ├── train_classifier.py
-│   ├── evaluate_retrieval.py
-│   ├── evaluate_classifier.py
-│   ├── evaluate_pipeline.py
-│   ├── error_analysis.py
-│   └── pipeline.py
+├── data/
 ├── notebooks/
 ├── reports/
-├── tests/
-└── data/
+│   ├── figures/
+│   │   └── system_architecture.png
+│   ├── paper_draft.md
+│   ├── one_page_summary.md
+│   ├── evaluation_results.md
+│   └── error_analysis.md
+├── src/
+│   ├── query_planner.py
+│   ├── web_retriever.py
+│   ├── source_ranker.py
+│   ├── evidence_summarizer.py
+│   ├── evidence_synthesizer.py
+│   ├── web_pipeline.py
+│   ├── report_builder.py
+│   ├── evaluate_realworld_benchmark.py
+│   └── ...
+└── tests/
 ```
 
-## Example output format
-
-```json
-{
-  "claim": "The capital of France is Paris.",
-  "predicted_label": "Likely Supported",
-  "confidence": 0.83,
-  "retrieval_method": "Hybrid",
-  "source_mode": "Live public evidence retrieval",
-  "top_evidence": [
-    {
-      "title": "Paris",
-      "url": "https://en.wikipedia.org/wiki/Paris",
-      "score": 0.81,
-      "text": "..."
-    }
-  ]
-}
-```
-
-This is an output format example, not a reported experiment result.
+---
 
 ## Ethical considerations
 
-- The system should support human judgment, not replace it.
-- Predictions depend on retrieved evidence and can be wrong.
-- The system may miss important sources or retrieve irrelevant evidence.
-- Confidence is a ranking signal, not proof of truth.
-- Time-sensitive claims require fresh sources.
-- Medical, legal, financial, and safety-related claims should be checked with qualified experts or authoritative sources.
+- This is not a guaranteed truth engine.
+- The system depends on retrieved public sources.
+- It can make incorrect predictions if evidence is missing, misleading, outdated, or ambiguous.
+- Confidence is a signal, not proof.
+- High-stakes domains such as medical, legal, financial, or political claims require expert review.
+- The tool is designed to support human judgment, not replace it.
+
+---
 
 ## Limitations
 
-- No evidence retrieval system can verify every real-world fact.
-- Some claims are private, local, undocumented, ambiguous, disputed, or too recent.
-- DuckDuckGo/web retrieval can vary depending on network access and search availability.
-- Wikipedia and OpenAlex coverage is strong for many public topics but not universal.
-- The Streamlit app uses source-grounded retrieval and transparent evidence labeling, while the full research pipeline includes dense retrieval and classifier training scripts.
-- The SciFact benchmark pipeline must be run separately to generate real experiment metrics.
+- Live web search may miss important sources.
+- Search APIs and public endpoints can fail or change.
+- Some claims require specialized databases that are not included.
+- Very recent claims may not have reliable indexed evidence yet.
+- Rule-based synthesis is transparent and lightweight, but less powerful than a carefully evaluated LLM reasoning system.
+- Benchmark numbers must be generated by running the included scripts.
+
+---
 
 ## Future work
 
-- Add optional search APIs such as Brave Search, Tavily, Bing Web Search, or Google Custom Search.
-- Add official-source filters for `.gov`, `.edu`, and organization domains.
-- Add freshness-aware source ranking for current claims.
-- Add cross-encoder reranking.
-- Add a trained natural language inference classifier.
-- Add source comparison for conflicting evidence.
-- Add quote highlighting and stronger citation extraction.
-- Evaluate on additional datasets beyond SciFact.
+- Evaluate on AVeriTeC, SciFact, FEVER, or LIAR.
+- Add optional local small-language-model reasoning for query planning and evidence synthesis.
+- Add stronger temporal filtering for current-event claims.
+- Add source date extraction and publication-date scoring.
+- Add a saved benchmark leaderboard after real experiments are run.
+- Add a short demo GIF to the README.
+- Improve contradiction detection beyond keyword cues.
 
-## College admissions/project summary blurb
+---
 
-I built an evidence-grounded AI fact verification system that retrieves public sources, ranks evidence passages, and predicts whether a claim is likely supported, possibly refuted, or lacks enough evidence. The project compares TF-IDF, BM25, dense retrieval, and hybrid retrieval for trustworthy AI research, and includes a functional Streamlit app, SciFact research pipeline, modular Python code, evaluation scripts, tests, notebooks, error analysis, and a research paper draft. It demonstrates skills in Python, NLP, machine learning, information retrieval, software engineering, reproducible research, and ethical AI design.
+## College portfolio blurb
+
+Built a modular AI fact-checking system that verifies claims using live public evidence. The system plans search queries, retrieves and ranks sources, summarizes evidence, synthesizes findings, handles time-sensitive claims, and generates transparent citation-backed reports through a Streamlit app. The repository also includes a scientific claim verification research pipeline, evaluation scripts, notebooks, tests, and a research paper draft.

@@ -171,3 +171,11 @@ The updated hosted app extends the original scientific claim verification projec
 This extension does not mean the system can verify all real-world facts. It works best for public, well-documented claims and is weaker for private, local, very recent, or disputed claims. The app therefore reports an evidence signal and shows source links rather than presenting the prediction as absolute truth.
 
 The live app uses TF-IDF, BM25, and hybrid keyword retrieval so it can run without a GPU. The full research repository also includes dense retrieval and SciFact experiment scripts for benchmark-style evaluation.
+
+## Addendum: Modular Web-Grounded Fact Verification Upgrade
+
+The deployed version of the project extends the original scientific claim verification pipeline into a broader web-grounded fact verification prototype. The app now follows a modular workflow: claim type detection, query planning, live evidence retrieval, source ranking, evidence summarization, evidence synthesis, freshness checking for time-sensitive claims, final evidence labeling, and report generation.
+
+This upgrade improves explainability because users can inspect the search plan, retrieved sources, source-quality signals, evidence summaries, synthesis, and citations. The system also includes a benchmark evaluation script that can compute accuracy, macro F1, per-class metrics, and confusion matrices from a labeled CSV. These results are intentionally not filled in until the evaluation is actually run.
+
+The system remains a research prototype. It does not guarantee truth, and it can fail when public evidence is incomplete, outdated, misleading, or ambiguous. Its purpose is to support human evidence review by making retrieval and reasoning steps visible.

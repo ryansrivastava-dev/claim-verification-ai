@@ -1,46 +1,51 @@
-# Evidence-Based Fact Verification AI
+# Evidence-Based Fact Verification AI — One-Page Summary
 
 ## Problem
 
-People encounter factual claims online every day, but many claims are difficult to verify quickly. A trustworthy AI system should not simply guess. It should retrieve evidence, show sources, and clearly indicate when available evidence is insufficient.
+Online information changes quickly, and people often see claims without knowing what evidence supports or refutes them. A useful fact-checking system should not just output an answer; it should show the sources, search strategy, and reasoning path behind the answer.
 
 ## What I built
 
-I built a Python-based evidence-grounded claim verification project. The research core focuses on scientific claim verification with SciFact-style data, while the deployed Streamlit app retrieves live public evidence from general web search, Wikipedia, and OpenAlex scholarly works.
+I built a modular AI fact-checking system that verifies claims using live public evidence. The app accepts a factual claim, plans search queries, retrieves evidence from public sources, ranks sources by relevance and credibility signals, summarizes evidence passages, synthesizes the findings, handles time-sensitive claims, and generates a transparent citation-backed report.
 
-The app takes a claim, searches public sources, extracts evidence passages, ranks those passages, and produces a transparent evidence label such as `Likely Supported`, `Possibly Refuted`, or `Not Enough Evidence`.
+## System workflow
+
+```text
+Claim → Claim Type Detection → Query Planning → Live Evidence Retrieval → Source Ranking → Evidence Summarization → Evidence Synthesis → Freshness Guardrail → Verdict + Citations + Report
+```
 
 ## Methods
 
-The project compares multiple retrieval methods:
-
-- TF-IDF keyword retrieval
-- BM25 keyword retrieval
-- Hybrid keyword retrieval
-- Dense sentence-embedding retrieval in the full research environment
-
-The deployed app uses no-GPU retrieval methods so it can run on Streamlit Community Cloud.
+- TF-IDF retrieval
+- BM25 retrieval
+- Hybrid retrieval
+- Source credibility scoring
+- Extractive evidence summarization
+- Evidence synthesis
+- Current-fact/freshness guardrail
+- Downloadable Markdown and PDF reports
 
 ## Evaluation
 
-The repository includes scripts for retrieval evaluation, classifier evaluation, end-to-end pipeline evaluation, and error analysis. Metrics include Recall@k, Precision@k, MRR, accuracy, macro F1, per-class F1, and confusion matrices when gold labels are available.
-
-## Results placeholder
-
-Final benchmark results should be filled in after running the experiment scripts. The project intentionally avoids fake metrics or fabricated dataset statistics.
+The project includes scripts for real benchmark evaluation using labeled CSV files. The system reports accuracy, macro F1, per-class metrics, prediction files, and confusion matrices only after experiments are actually run. No fabricated metrics are included.
 
 ## Skills demonstrated
 
 - Python software engineering
-- NLP preprocessing
-- Information retrieval
-- Machine learning baselines
-- Streamlit deployment
-- Reproducible research structure
-- Error analysis
+- NLP and information retrieval
+- Web evidence retrieval
+- Source ranking and credibility scoring
+- Streamlit app development
+- Modular system design
+- Testing with pytest
+- Research writing and reproducibility
 - Ethical AI design
-- GitHub-ready project organization
 
 ## Future work
 
-Future versions could add official-source filters, freshness ranking, cross-encoder reranking, larger trained NLI classifiers, better citation extraction, and evaluation on more fact-checking datasets.
+- Evaluate on AVeriTeC, SciFact, FEVER, or LIAR
+- Add optional small-language-model reasoning
+- Improve contradiction detection
+- Add source-date extraction
+- Add a public benchmark leaderboard after running real experiments
+- Add a demo video or GIF
